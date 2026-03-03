@@ -1,0 +1,147 @@
+/**
+ * IndexedDB schema for the Pokedex app.
+ *
+ * Stores:
+ * - saves: Imported save file metadata + raw data
+ * - pokemon: Individual Pokemon records with location info
+ * - registry: Pokedex completion tracking (one entry per species)
+ * - snapshots: Save state snapshots for diff comparisons
+ */
+
+import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+
+export interface SaveRecord {
+  id: string; // UUID
+  filename: string;
+  gameVersion: string;
+  trainerName: string;
+  trainerId: number;
+  secretId: number;
+  importDate: number; // timestamp
+  totalPokemon: number;
+  uniqueSpecies: number;
+  rawData: ArrayBuffer; // original .sav file
+}
+
+export interface PokemonRecord {
+  id: string; // UUID
+  saveId: string;
+  identityKey: string; // pid-otId-otSid
+  species: number;
+  nickname: string;
+  level: number;
+  pid: number;
+  otId: number;
+  otSid: number;
+  otName: string;
+  isShiny: boolean;
+  isEgg: boolean;
+  location: 'party' | 'box';
+  containerIndex: number;
+  slotIndex: number;
+  nature: number;
+  ability: number;
+  heldItem: number;
+  moves: [number, number, number, number];
+  ivs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
+  evs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
+  originGame?: number;
+}
+
+export interface RegistryEntry {
+  species: number; // primary key
+  caught: boolean;
+  firstCaughtDate: number | null;
+  lastSeenSaveId: string | null;
+  locations: { saveId: string; location: string }[];
+}
+
+export interface SnapshotRecord {
+  id: string; // UUID
+  saveId: string;
+  timestamp: number;
+  pokemonKeys: string[]; // identity keys present in this snapshot
+  pokemonData: PokemonRecord[]; // full pokemon data for diffing
+}
+
+export interface DirectoryRecord {
+  id: 'watched-dir';
+  handle: FileSystemDirectoryHandle;
+  lastScanTime: number;
+}
+
+export interface PokedexDB extends DBSchema {
+  saves: {
+    key: string;
+    value: SaveRecord;
+    indexes: {
+      'by-date': number;
+      'by-trainer': string;
+    };
+  };
+  pokemon: {
+    key: string;
+    value: PokemonRecord;
+    indexes: {
+      'by-save': string;
+      'by-species': number;
+      'by-identity': string;
+    };
+  };
+  registry: {
+    key: number;
+    value: RegistryEntry;
+  };
+  snapshots: {
+    key: string;
+    value: SnapshotRecord;
+    indexes: {
+      'by-save': string;
+      'by-date': number;
+    };
+  };
+  directories: {
+    key: string;
+    value: DirectoryRecord;
+  };
+}
+
+const DB_NAME = 'pokedex-db';
+const DB_VERSION = 2;
+
+let dbPromise: Promise<IDBPDatabase<PokedexDB>> | null = null;
+
+export function getDB(): Promise<IDBPDatabase<PokedexDB>> {
+  if (!dbPromise) {
+    dbPromise = openDB<PokedexDB>(DB_NAME, DB_VERSION, {
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          // Saves store
+          const saveStore = db.createObjectStore('saves', { keyPath: 'id' });
+          saveStore.createIndex('by-date', 'importDate');
+          saveStore.createIndex('by-trainer', 'trainerName');
+
+          // Pokemon store
+          const pokemonStore = db.createObjectStore('pokemon', { keyPath: 'id' });
+          pokemonStore.createIndex('by-save', 'saveId');
+          pokemonStore.createIndex('by-species', 'species');
+          pokemonStore.createIndex('by-identity', 'identityKey');
+
+          // Registry store (one entry per species)
+          db.createObjectStore('registry', { keyPath: 'species' });
+
+          // Snapshots store
+          const snapshotStore = db.createObjectStore('snapshots', { keyPath: 'id' });
+          snapshotStore.createIndex('by-save', 'saveId');
+          snapshotStore.createIndex('by-date', 'timestamp');
+        }
+
+        if (oldVersion < 2) {
+          // Directories store for persisting FileSystemDirectoryHandle
+          db.createObjectStore('directories', { keyPath: 'id' });
+        }
+      },
+    });
+  }
+  return dbPromise;
+}

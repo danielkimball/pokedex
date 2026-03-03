@@ -1,0 +1,213 @@
+/* Anime-style Pokedex device frame */
+
+.pokedex-shell {
+  position: relative;
+  width: 100%;
+  max-width: 430px;
+  height: 100dvh;
+  margin: 0 auto;
+  background: linear-gradient(145deg, #CC0000 0%, #990000 50%, #800000 100%);
+  box-shadow:
+    inset 2px 2px 4px rgba(255,255,255,0.15),
+    inset -2px -2px 4px rgba(0,0,0,0.3),
+    0 0 40px rgba(0,0,0,0.5);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Top section with LED indicators — styled like the actual Pokédex */
+.pokedex-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 10px;
+  flex-shrink: 0;
+}
+
+.pokedex-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.pokedex-header-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Ridge/hinge between header and screen, like the real Pokédex fold */
+.pokedex-hinge {
+  height: 7px;
+  background: linear-gradient(180deg, #770000 0%, #aa0000 50%, #770000 100%);
+  border-top: 1px solid rgba(255,255,255,0.12);
+  border-bottom: 1px solid rgba(0,0,0,0.4);
+  flex-shrink: 0;
+}
+
+.led-large {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #c8eeff, #55aaff 35%, #2266dd 65%, #1144aa 100%);
+  border: 4px solid #eeeeee;
+  box-shadow:
+    0 0 0 2px #888888,
+    0 0 12px rgba(51, 153, 255, 0.7),
+    inset 0 0 8px rgba(255,255,255,0.4),
+    3px 3px 6px rgba(0,0,0,0.4);
+  animation: led-pulse 3s ease-in-out infinite;
+}
+
+.led-small {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid rgba(0,0,0,0.3);
+}
+
+.led-red {
+  background: radial-gradient(circle at 40% 40%, #ff6666, #ff3333 50%, #cc0000);
+  box-shadow: 0 0 4px rgba(255, 51, 51, 0.5);
+}
+
+.led-yellow {
+  background: radial-gradient(circle at 40% 40%, #ffee66, #ffcc33 50%, #cc9900);
+  box-shadow: 0 0 4px rgba(255, 204, 51, 0.5);
+}
+
+.led-green {
+  background: radial-gradient(circle at 40% 40%, #66ff66, #33ff33 50%, #00cc00);
+  box-shadow: 0 0 4px rgba(51, 255, 51, 0.5);
+  animation: led-blink 2s ease-in-out infinite;
+}
+
+@keyframes led-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px #888888, 0 0 10px rgba(51, 153, 255, 0.6), inset 0 0 6px rgba(255,255,255,0.3), 3px 3px 6px rgba(0,0,0,0.4); }
+  50% { box-shadow: 0 0 0 2px #888888, 0 0 18px rgba(51, 153, 255, 0.9), inset 0 0 8px rgba(255,255,255,0.5), 3px 3px 6px rgba(0,0,0,0.4); }
+}
+
+@keyframes led-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Main screen area */
+.pokedex-screen-container {
+  margin: 0 12px;
+  padding: 8px;
+  background: #222;
+  border-radius: 8px;
+  border: 3px solid #555;
+  box-shadow:
+    inset 0 0 10px rgba(0,0,0,0.5),
+    0 2px 4px rgba(0,0,0,0.3);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pokedex-screen {
+  position: relative;
+  background: #111111;
+  border-radius: 4px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Bottom buttons/dpad area */
+.pokedex-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  flex-shrink: 0;
+}
+
+.dpad {
+  width: 60px;
+  height: 60px;
+  position: relative;
+}
+
+.dpad-h, .dpad-v {
+  position: absolute;
+  background: #333;
+  border-radius: 4px;
+}
+
+.dpad-h {
+  width: 60px;
+  height: 20px;
+  top: 20px;
+  left: 0;
+}
+
+.dpad-v {
+  width: 20px;
+  height: 60px;
+  top: 0;
+  left: 20px;
+}
+
+.dpad-center {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  top: 20px;
+  left: 20px;
+  background: #444;
+  border-radius: 2px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-round {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #666;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.btn-round:active {
+  transform: scale(0.92);
+}
+
+.btn-a {
+  background: #cc3333;
+}
+
+.btn-b {
+  background: #3366cc;
+}
+
+/* Card carousel slide animations */
+@keyframes card-slide-from-right {
+  from { transform: translateX(108%); }
+  to   { transform: translateX(0); }
+}
+@keyframes card-slide-from-left {
+  from { transform: translateX(-108%); }
+  to   { transform: translateX(0); }
+}
+.card-slide-next { animation: card-slide-from-right 0.28s cubic-bezier(0.22, 0.61, 0.36, 1); }
+.card-slide-prev { animation: card-slide-from-left  0.28s cubic-bezier(0.22, 0.61, 0.36, 1); }
+.card-carousel-clip { overflow: hidden; }
+
+/* Responsive */
+@media (min-width: 768px) {
+  .pokedex-shell {
+    margin-top: 20px;
+    border-radius: 20px;
+    height: calc(100vh - 40px);
+  }
+}
