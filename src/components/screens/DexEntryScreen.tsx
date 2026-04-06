@@ -212,9 +212,9 @@ export function DexEntryScreen() {
           </div>
           <span style={{
             ...s.caughtBadge,
-            background: isCaught ? 'rgba(51,255,51,0.15)' : 'rgba(255,68,68,0.1)',
-            borderColor: isCaught ? '#33ff33' : '#ff444466',
-            color: isCaught ? '#33ff33' : '#ff6666',
+            background: isCaught ? 'rgba(79,195,247,0.15)' : 'rgba(255,68,68,0.1)',
+            borderColor: isCaught ? '#4FC3F7' : '#ff444466',
+            color: isCaught ? '#4FC3F7' : '#ff6666',
           }}>
             {isCaught ? 'CAUGHT' : 'MISSING'}
           </span>
@@ -415,8 +415,8 @@ export function DexEntryScreen() {
                     <div
                       style={{
                         ...s.evoCard,
-                        borderColor: isCurrentPokemon ? '#33ff33' : '#33ff3333',
-                        background: isCurrentPokemon ? 'rgba(51,255,51,0.08)' : 'transparent',
+                        borderColor: isCurrentPokemon ? '#4FC3F7' : '#4FC3F733',
+                        background: isCurrentPokemon ? 'rgba(79,195,247,0.08)' : 'transparent',
                         cursor: isCurrentPokemon ? 'default' : 'pointer',
                       }}
                       onClick={() => {
@@ -429,7 +429,7 @@ export function DexEntryScreen() {
                       <img src={SPRITE_URL(speciesNum)} alt={speciesName} style={s.evoSprite} />
                       <span style={{
                         ...s.evoName,
-                        color: speciesCaught ? '#33ff33' : '#22aa2288',
+                        color: speciesCaught ? '#4FC3F7' : '#2E86C188',
                       }}>
                         {speciesName}
                       </span>
@@ -442,7 +442,7 @@ export function DexEntryScreen() {
             {/* Branching evolutions (Eevee etc.) */}
             {evolvesTo && evolvesTo.length > 1 && (
               <div style={{ marginTop: '8px' }}>
-                <div style={{ fontSize: '10px', color: '#22aa22', marginBottom: '4px' }}>Evolves into:</div>
+                <div style={{ fontSize: '10px', color: '#2E86C1', marginBottom: '4px' }}>Evolves into:</div>
                 {evolvesTo.map(evo => {
                   const evoName = SPECIES[evo.species] || '???';
                   const evoCaught = registryMap.get(evo.species)?.caught ?? false;
@@ -453,10 +453,10 @@ export function DexEntryScreen() {
                       onClick={() => { navigate(`/dex/${evo.species}`); scrollRef.current?.scrollTo(0, 0); }}
                     >
                       <img src={SPRITE_URL(evo.species)} alt={evoName} style={s.branchSprite} />
-                      <span style={{ fontSize: '11px', color: evoCaught ? '#33ff33' : '#22aa22', flex: 1 }}>
+                      <span style={{ fontSize: '11px', color: evoCaught ? '#4FC3F7' : '#2E86C1', flex: 1 }}>
                         {evoName}
                       </span>
-                      <span style={{ fontSize: '10px', color: '#22aa2288' }}>{evo.method}</span>
+                      <span style={{ fontSize: '10px', color: '#2E86C188' }}>{evo.method}</span>
                     </div>
                   );
                 })}
@@ -498,7 +498,7 @@ export function DexEntryScreen() {
         {/* If no game location data and not caught */}
         {gameLocations.length === 0 && !LOCATIONS && !isCaught && (
           <div style={s.section}>
-            <div style={{ fontSize: '11px', color: '#22aa2266', textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#2E86C166', textAlign: 'center' }}>
               Import a save file containing this Pokemon to register it.
             </div>
           </div>
@@ -513,23 +513,23 @@ const s = {
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100%',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between' as const,
     alignItems: 'center' as const,
     padding: '6px 10px',
-    borderBottom: '1px solid #33ff3322',
+    borderBottom: '1px solid #4FC3F722',
     flexShrink: 0,
   },
   navBtn: {
     background: 'none',
-    border: '1px solid #33ff3333',
+    border: '1px solid #4FC3F733',
     borderRadius: '4px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     fontSize: '12px',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
     cursor: 'pointer',
     padding: '4px 10px',
   },
@@ -558,13 +558,13 @@ const s = {
   },
   dexNumber: {
     fontSize: '11px',
-    color: '#22aa22',
+    color: '#2E86C1',
   },
   pokemonName: {
     fontSize: '20px',
     fontWeight: 'bold' as const,
-    color: '#33ff33',
-    textShadow: '0 0 6px rgba(51,255,51,0.3)',
+    color: '#4FC3F7',
+    textShadow: '0 0 6px rgba(79,195,247,0.3)',
   },
   typeRow: {
     display: 'flex',
@@ -578,19 +578,19 @@ const s = {
     borderRadius: '4px',
     fontSize: '10px',
     fontWeight: 'bold' as const,
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
     alignSelf: 'flex-start' as const,
     flexShrink: 0,
   },
   infoLine: {
     fontSize: '10px',
-    color: '#22aa2288',
+    color: '#2E86C188',
     marginBottom: '8px',
     paddingLeft: '2px',
   },
   section: {
     padding: '8px',
-    border: '1px solid #33ff3322',
+    border: '1px solid #4FC3F722',
     borderRadius: '4px',
     marginBottom: '8px',
     background: 'rgba(0,0,0,0.15)',
@@ -606,11 +606,11 @@ const s = {
   },
   toggleArrow: {
     fontSize: '8px',
-    color: '#22aa22',
+    color: '#2E86C1',
   },
   sectionTitle: {
     fontSize: '10px',
-    color: '#22aa22',
+    color: '#2E86C1',
     textTransform: 'uppercase' as const,
     letterSpacing: '1px',
   },
@@ -618,12 +618,12 @@ const s = {
     display: 'flex',
     justifyContent: 'space-between' as const,
     fontSize: '11px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     padding: '3px 0',
-    borderBottom: '1px solid rgba(51,255,51,0.06)',
+    borderBottom: '1px solid rgba(79,195,247,0.06)',
   },
   locDetail: {
-    color: '#22aa22',
+    color: '#2E86C1',
     fontSize: '10px',
   },
   evoChain: {
@@ -640,13 +640,13 @@ const s = {
   },
   evoMethod: {
     fontSize: '9px',
-    color: '#22aa2288',
+    color: '#2E86C188',
     padding: '2px 0',
     textAlign: 'center' as const,
   },
   evoArrow: {
     fontSize: '10px',
-    color: '#33ff3344',
+    color: '#4FC3F744',
     padding: '1px 0',
   },
   evoCard: {
@@ -671,7 +671,7 @@ const s = {
   },
   evoDot: {
     fontSize: '10px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     flexShrink: 0,
   },
   branchRow: {
@@ -679,7 +679,7 @@ const s = {
     alignItems: 'center' as const,
     gap: '6px',
     padding: '3px 4px',
-    borderBottom: '1px solid rgba(51,255,51,0.06)',
+    borderBottom: '1px solid rgba(79,195,247,0.06)',
     cursor: 'pointer',
   },
   branchSprite: {
@@ -690,18 +690,18 @@ const s = {
   },
   gameName: {
     fontSize: '11px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     fontWeight: 'bold' as const,
     marginBottom: '2px',
   },
   locationLine: {
     fontSize: '10px',
-    color: '#22aa22',
+    color: '#2E86C1',
     padding: '1px 0 1px 8px',
   },
   notFound: {
     textAlign: 'center' as const,
-    color: '#22aa22',
+    color: '#2E86C1',
     fontSize: '14px',
     marginTop: '40px',
   },
@@ -924,7 +924,7 @@ const st = {
   },
   statVal: {
     fontSize: '10px',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
     padding: '1px 0',
     color: '#333',
   },

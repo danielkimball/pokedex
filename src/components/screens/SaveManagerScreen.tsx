@@ -1,13 +1,16 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../state/store';
 import { deleteSave } from '../../db/save-store';
+import { listBackups, downloadBackup, restoreBackup, deleteBackup } from '../../db/backup-store';
+import { writeBackToLinkedFile, supportsWriteback } from '../../state/actions/save-to-file';
 import { StatusLED } from '../ui/StatusLED';
+import type { BackupRecord } from '../../db/schema';
 
 const styles = {
   container: {
     padding: '12px',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
     minHeight: '100%',
   },
   header: {
@@ -18,28 +21,28 @@ const styles = {
   },
   backButton: {
     background: 'none',
-    border: '1px solid #33ff3355',
+    border: '1px solid #4FC3F755',
     borderRadius: '4px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     fontSize: '12px',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
     cursor: 'pointer',
     padding: '6px 12px',
   },
   title: {
     fontSize: '14px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     letterSpacing: '1px',
   },
   emptyState: {
     textAlign: 'center' as const,
-    color: '#22aa22',
+    color: '#2E86C1',
     fontSize: '13px',
     marginTop: '40px',
     padding: '20px',
   },
   saveCard: {
-    border: '1px solid #33ff3333',
+    border: '1px solid #4FC3F733',
     borderRadius: '4px',
     padding: '12px',
     marginBottom: '10px',
@@ -53,21 +56,21 @@ const styles = {
   },
   trainerName: {
     fontSize: '15px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     fontWeight: 'bold' as const,
   },
   gameVersion: {
     fontSize: '11px',
-    color: '#22aa22',
+    color: '#2E86C1',
     padding: '2px 6px',
-    border: '1px solid #22aa2255',
+    border: '1px solid #2E86C155',
     borderRadius: '3px',
   },
   infoRow: {
     display: 'flex',
     justifyContent: 'space-between' as const,
     fontSize: '11px',
-    color: '#22aa22',
+    color: '#2E86C1',
     padding: '3px 0',
   },
   buttonRow: {
@@ -79,12 +82,12 @@ const styles = {
   actionButton: {
     flex: 1,
     padding: '8px 6px',
-    background: '#1a3a1a',
-    border: '1px solid #33ff3355',
+    background: '#101833',
+    border: '1px solid #4FC3F755',
     borderRadius: '4px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     fontSize: '11px',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
     cursor: 'pointer',
     textAlign: 'center' as const,
     minWidth: '80px',
@@ -97,7 +100,7 @@ const styles = {
     borderRadius: '4px',
     color: '#ff4444',
     fontSize: '11px',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
     cursor: 'pointer',
     textAlign: 'center' as const,
     minWidth: '80px',
@@ -112,13 +115,13 @@ const styles = {
     zIndex: 100,
   },
   confirmBox: {
-    background: '#1a2a1a',
-    border: '2px solid #33ff33',
+    background: '#101822',
+    border: '2px solid #4FC3F7',
     borderRadius: '8px',
     padding: '20px',
     maxWidth: '300px',
     width: '90%',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
   },
   confirmTitle: {
     fontSize: '14px',
@@ -128,13 +131,76 @@ const styles = {
   },
   confirmText: {
     fontSize: '12px',
-    color: '#22aa22',
+    color: '#2E86C1',
     marginBottom: '16px',
     textAlign: 'center' as const,
   },
   confirmButtons: {
     display: 'flex',
     gap: '10px',
+  },
+  backupSection: {
+    marginTop: '8px',
+    borderTop: '1px solid #4FC3F722',
+    paddingTop: '8px',
+  },
+  backupToggle: {
+    background: 'none',
+    border: 'none',
+    color: '#2E86C1',
+    fontSize: '11px',
+    fontFamily: "inherit",
+    cursor: 'pointer',
+    padding: '2px 0',
+  },
+  backupList: {
+    marginTop: '6px',
+  },
+  backupItem: {
+    display: 'flex',
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    padding: '6px 0',
+    borderBottom: '1px solid #4FC3F711',
+    fontSize: '11px',
+    color: '#2E86C1',
+  },
+  backupActions: {
+    display: 'flex',
+    gap: '4px',
+  },
+  backupBtn: {
+    padding: '3px 8px',
+    background: '#101833',
+    border: '1px solid #4FC3F733',
+    borderRadius: '3px',
+    color: '#4FC3F7',
+    fontSize: '10px',
+    fontFamily: "inherit",
+    cursor: 'pointer',
+  },
+  backupBtnDanger: {
+    padding: '3px 8px',
+    background: '#2a1515',
+    border: '1px solid #ff333333',
+    borderRadius: '3px',
+    color: '#ff6666',
+    fontSize: '10px',
+    fontFamily: "inherit",
+    cursor: 'pointer',
+  },
+  saveToFileBtn: {
+    flex: 1,
+    padding: '8px 6px',
+    background: '#101833',
+    border: '1px solid #81D4FA',
+    borderRadius: '4px',
+    color: '#81D4FA',
+    fontSize: '11px',
+    fontFamily: "inherit",
+    cursor: 'pointer',
+    textAlign: 'center' as const,
+    minWidth: '80px',
   },
 } as const;
 
@@ -145,6 +211,12 @@ export function SaveManagerScreen() {
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [expandedBackups, setExpandedBackups] = useState<string | null>(null);
+  const [backups, setBackups] = useState<Omit<BackupRecord, 'rawData'>[]>([]);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [savingToFile, setSavingToFile] = useState<string | null>(null);
+  const [saveFileStatus, setSaveFileStatus] = useState<string | null>(null);
 
   const handleDelete = useCallback(async (saveId: string) => {
     setDeleting(true);
@@ -158,6 +230,54 @@ export function SaveManagerScreen() {
       setDeleteConfirmId(null);
     }
   }, [saves, setSaves]);
+
+  const toggleBackups = useCallback(async (saveId: string) => {
+    if (expandedBackups === saveId) {
+      setExpandedBackups(null);
+      return;
+    }
+    setExpandedBackups(saveId);
+    setLoadingBackups(true);
+    try {
+      setBackups(await listBackups(saveId));
+    } finally {
+      setLoadingBackups(false);
+    }
+  }, [expandedBackups]);
+
+  const handleRestore = useCallback(async (backupId: string, saveId: string) => {
+    if (!confirm('Restore this backup? A backup of the current state will be created first.')) return;
+    setRestoringId(backupId);
+    try {
+      await restoreBackup(backupId);
+      setBackups(await listBackups(saveId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Restore failed');
+    } finally {
+      setRestoringId(null);
+    }
+  }, []);
+
+  const handleDeleteBackup = useCallback(async (backupId: string, saveId: string) => {
+    await deleteBackup(backupId);
+    setBackups(await listBackups(saveId));
+  }, []);
+
+  const handleSaveToFile = useCallback(async (saveId: string) => {
+    setSavingToFile(saveId);
+    setSaveFileStatus(null);
+    try {
+      const result = await writeBackToLinkedFile(saveId);
+      if (result === 'written') setSaveFileStatus('Saved to Delta!');
+      else if (result === 'downloaded') setSaveFileStatus('Downloaded');
+      else setSaveFileStatus('No data');
+    } catch (e) {
+      setSaveFileStatus(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setSavingToFile(null);
+      setTimeout(() => setSaveFileStatus(null), 3000);
+    }
+  }, []);
 
   const saveToDelete = deleteConfirmId ? saves.find(s => s.id === deleteConfirmId) : null;
 
@@ -234,6 +354,78 @@ export function SaveManagerScreen() {
             >
               DELETE
             </button>
+          </div>
+
+          {/* Save to file button */}
+          <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+            <button
+              style={styles.saveToFileBtn}
+              disabled={savingToFile === save.id}
+              onClick={() => handleSaveToFile(save.id)}
+            >
+              {savingToFile === save.id
+                ? 'SAVING...'
+                : supportsWriteback()
+                  ? 'SAVE TO DELTA'
+                  : 'DOWNLOAD .SAV'}
+            </button>
+          </div>
+          {saveFileStatus && savingToFile === null && (
+            <div style={{ fontSize: '10px', color: '#81D4FA', textAlign: 'center', marginTop: '4px' }}>
+              {saveFileStatus}
+            </div>
+          )}
+
+          {/* Backups section */}
+          <div style={styles.backupSection}>
+            <button
+              style={styles.backupToggle}
+              onClick={() => toggleBackups(save.id)}
+            >
+              {expandedBackups === save.id ? '▼' : '▶'} BACKUPS
+            </button>
+
+            {expandedBackups === save.id && (
+              <div style={styles.backupList}>
+                {loadingBackups ? (
+                  <div style={{ fontSize: '11px', color: '#2E86C155' }}>Loading...</div>
+                ) : backups.length === 0 ? (
+                  <div style={{ fontSize: '11px', color: '#2E86C155' }}>
+                    No backups yet. Backups are created automatically before modifications.
+                  </div>
+                ) : (
+                  backups.map(b => (
+                    <div key={b.id} style={styles.backupItem}>
+                      <div>
+                        <div>{new Date(b.timestamp).toLocaleString()}</div>
+                        <div style={{ fontSize: '10px', opacity: 0.7 }}>{b.reason}</div>
+                      </div>
+                      <div style={styles.backupActions}>
+                        <button
+                          style={styles.backupBtn}
+                          onClick={() => downloadBackup(b.id)}
+                        >
+                          DL
+                        </button>
+                        <button
+                          style={styles.backupBtn}
+                          disabled={restoringId === b.id}
+                          onClick={() => handleRestore(b.id, save.id)}
+                        >
+                          {restoringId === b.id ? '...' : 'RESTORE'}
+                        </button>
+                        <button
+                          style={styles.backupBtnDanger}
+                          onClick={() => handleDeleteBackup(b.id, save.id)}
+                        >
+                          X
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
       ))}

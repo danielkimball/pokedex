@@ -17,6 +17,74 @@ import { crc16 } from '../crypto/crc16';
 
 export type GameVersion = 'DP' | 'Pt' | 'HGSS';
 
+/** Specific game within a version family */
+export type SpecificGame = 'Diamond' | 'Pearl' | 'Platinum' | 'HeartGold' | 'SoulSilver';
+
+/**
+ * Origin game IDs stored in Pokemon data (Block C, offset 0x18).
+ * Used to determine which specific game a Pokemon was caught in.
+ */
+const ORIGIN_GAME_MAP: Record<number, SpecificGame> = {
+  7: 'HeartGold',
+  8: 'SoulSilver',
+  10: 'Diamond',
+  11: 'Pearl',
+  12: 'Platinum',
+};
+
+/**
+ * Determine the specific game (e.g., HeartGold vs SoulSilver) by examining
+ * the origin game field of Pokemon in the save.
+ *
+ * Strategy: look at Pokemon whose OT ID matches the trainer — those were
+ * caught in this save's game. Fall back to most common origin game.
+ */
+export function detectSpecificGame(
+  version: GameVersion,
+  trainerId: number,
+  secretId: number,
+  pokemonOriginGames: { originGame: number; otId: number; otSid: number }[],
+): SpecificGame {
+  // Expected origin game IDs for each version family
+  const familyIds: Record<GameVersion, number[]> = {
+    DP: [10, 11],      // Diamond, Pearl
+    Pt: [12],           // Platinum
+    HGSS: [7, 8],      // HeartGold, SoulSilver
+  };
+
+  const validIds = familyIds[version];
+
+  // First: check Pokemon that belong to this trainer (caught in this game)
+  const ownPokemon = pokemonOriginGames.filter(
+    p => (p.otId & 0xFFFF) === trainerId && ((p.otId >>> 16) & 0xFFFF) === secretId
+  );
+
+  for (const p of ownPokemon) {
+    if (validIds.includes(p.originGame) && ORIGIN_GAME_MAP[p.originGame]) {
+      return ORIGIN_GAME_MAP[p.originGame];
+    }
+  }
+
+  // Fallback: count origin games from all Pokemon in the valid set
+  const counts = new Map<number, number>();
+  for (const p of pokemonOriginGames) {
+    if (validIds.includes(p.originGame)) {
+      counts.set(p.originGame, (counts.get(p.originGame) ?? 0) + 1);
+    }
+  }
+
+  let bestId = validIds[0];
+  let bestCount = 0;
+  for (const [id, count] of counts) {
+    if (count > bestCount) {
+      bestId = id;
+      bestCount = count;
+    }
+  }
+
+  return ORIGIN_GAME_MAP[bestId] ?? (version === 'DP' ? 'Diamond' : version === 'Pt' ? 'Platinum' : 'HeartGold');
+}
+
 interface DetectionConfig {
   version: GameVersion;
   generalBlockSize: number;

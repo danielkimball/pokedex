@@ -92,3 +92,15 @@ export function clearBoxSlot(
   const emptyData = new Uint8Array(STORED_SIZE);
   writeBoxSlot(storageBlock, version, boxIndex, slotIndex, emptyData);
 }
+
+/**
+ * Clear a party slot (fill with zeros).
+ */
+export function clearPartySlot(
+  generalBlock: Uint8Array,
+  version: GameVersion,
+  slotIndex: number,
+): void {
+  const emptyData = new Uint8Array(PARTY_SIZE);
+  writePartySlot(generalBlock, version, slotIndex, emptyData);
+}

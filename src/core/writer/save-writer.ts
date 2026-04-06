@@ -7,12 +7,12 @@ import { cloneBuffer } from '../../utils/binary';
 import type { GameVersion } from '../parser/save-detector';
 import { getBlockConfig } from '../parser/block-reader';
 import { serializePokemonStored, serializePokemonParty } from './pokemon-writer';
-import { writePartySlot, writePartyCount, writeBoxSlot, clearBoxSlot } from './block-writer';
+import { writePartySlot, writePartyCount, writeBoxSlot, clearBoxSlot, clearPartySlot } from './block-writer';
 import { finalizeSave } from './checksum-writer';
 import type { Pokemon } from '../parser/pokemon-parser';
 
 export interface SaveModification {
-  type: 'set_party' | 'set_box' | 'clear_box';
+  type: 'set_party' | 'set_box' | 'clear_box' | 'clear_party';
   pokemon?: Pokemon;
   /** Party slot (0-5) or box index (0-17) */
   containerIndex: number;
@@ -20,17 +20,24 @@ export interface SaveModification {
   slotIndex: number;
 }
 
+export interface WriteSaveOptions {
+  /** When clearing party slots, set this to the new party count (0-6). */
+  partyCount?: number;
+}
+
 /**
  * Apply modifications to a save file and return a new valid .sav buffer.
  * @param originalBuffer - Original save file
  * @param version - Detected game version
  * @param modifications - List of changes to apply
+ * @param options - Optional; use partyCount when clear_party is used
  * @returns New ArrayBuffer with modifications applied and checksums updated
  */
 export function writeSaveFile(
   originalBuffer: ArrayBuffer,
   version: GameVersion,
   modifications: SaveModification[],
+  options?: WriteSaveOptions,
 ): ArrayBuffer {
   // Clone the buffer so we don't modify the original
   const buffer = cloneBuffer(originalBuffer);
@@ -49,8 +56,6 @@ export function writeSaveFile(
   const storageBlock = saveData.subarray(storageStart, storageStart + storageDataSize);
 
   // Apply modifications
-  let partyCount = -1; // will be computed if party is modified
-
   for (const mod of modifications) {
     switch (mod.type) {
       case 'set_party': {
@@ -69,14 +74,19 @@ export function writeSaveFile(
         clearBoxSlot(storageBlock, version, mod.containerIndex, mod.slotIndex);
         break;
       }
+      case 'clear_party': {
+        clearPartySlot(generalBlock, version, mod.slotIndex);
+        break;
+      }
     }
   }
 
   // If party was modified, update party count
   const partyMods = modifications.filter(m => m.type === 'set_party');
-  if (partyMods.length > 0) {
-    // Count non-empty party slots
-    // For simplicity, count the modifications that set party pokemon
+  const clearPartyMods = modifications.filter(m => m.type === 'clear_party');
+  if (options?.partyCount !== undefined && (partyMods.length > 0 || clearPartyMods.length > 0)) {
+    writePartyCount(generalBlock, version, Math.max(0, Math.min(6, options.partyCount)));
+  } else if (partyMods.length > 0) {
     const maxSlot = Math.max(...partyMods.map(m => m.slotIndex));
     writePartyCount(generalBlock, version, maxSlot + 1);
   }

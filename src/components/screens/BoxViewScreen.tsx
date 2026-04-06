@@ -1,9 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useSavePokemon } from '../../db/hooks';
 import { SPECIES } from '../../core/constants/species';
 import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { TypeBadge } from '../ui/TypeBadge';
+import { transferToHome } from '../../state/actions/transfer';
+import { reorganizeBoxes, type BoxSortCriteria } from '../../state/actions/reorganize-boxes';
+import { writeBackToLinkedFile, supportsWriteback } from '../../state/actions/save-to-file';
 import type { PokemonRecord } from '../../db/schema';
 
 const SPRITE_URL = (n: number) =>
@@ -17,7 +20,7 @@ const SLOTS_PER_BOX = ROWS * COLS;
 const styles = {
   container: {
     padding: '12px',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
     minHeight: '100%',
   },
   header: {
@@ -28,11 +31,11 @@ const styles = {
   },
   backButton: {
     background: 'none',
-    border: '1px solid #33ff3355',
+    border: '1px solid #4FC3F755',
     borderRadius: '4px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     fontSize: '12px',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
     cursor: 'pointer',
     padding: '6px 12px',
   },
@@ -44,19 +47,19 @@ const styles = {
     marginBottom: '12px',
   },
   navButton: {
-    background: '#1a3a1a',
-    border: '1px solid #33ff3355',
+    background: '#101833',
+    border: '1px solid #4FC3F755',
     borderRadius: '4px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     fontSize: '16px',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
     cursor: 'pointer',
     padding: '6px 12px',
     lineHeight: 1,
   },
   boxLabel: {
     fontSize: '14px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     minWidth: '80px',
     textAlign: 'center' as const,
   },
@@ -68,8 +71,8 @@ const styles = {
   },
   cell: (hasPokemon: boolean) => ({
     aspectRatio: '1' as const,
-    background: hasPokemon ? 'rgba(51,255,51,0.06)' : 'rgba(0,0,0,0.2)',
-    border: '1px solid rgba(51,255,51,0.15)',
+    background: hasPokemon ? 'rgba(79,195,247,0.06)' : 'rgba(0,0,0,0.2)',
+    border: '1px solid rgba(79,195,247,0.15)',
     borderRadius: '4px',
     display: 'flex',
     alignItems: 'center' as const,
@@ -87,12 +90,12 @@ const styles = {
     width: '8px',
     height: '8px',
     borderRadius: '50%',
-    background: 'rgba(51,255,51,0.08)',
+    background: 'rgba(79,195,247,0.08)',
   },
   boxCount: {
     textAlign: 'center' as const,
     fontSize: '11px',
-    color: '#22aa22',
+    color: '#2E86C1',
     marginBottom: '8px',
   },
   overlay: {
@@ -105,13 +108,13 @@ const styles = {
     zIndex: 100,
   },
   popup: {
-    background: '#1a2a1a',
-    border: '2px solid #33ff33',
+    background: '#101822',
+    border: '2px solid #4FC3F7',
     borderRadius: '8px',
     padding: '16px',
     maxWidth: '280px',
     width: '90%',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
     textAlign: 'center' as const,
   },
   popupSprite: {
@@ -122,25 +125,111 @@ const styles = {
   },
   popupName: {
     fontSize: '16px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     fontWeight: 'bold' as const,
     marginBottom: '4px',
   },
   popupInfo: {
     fontSize: '11px',
-    color: '#22aa22',
+    color: '#2E86C1',
     marginBottom: '2px',
   },
   popupClose: {
     marginTop: '12px',
-    background: '#1a3a1a',
-    border: '1px solid #33ff3355',
+    background: '#101833',
+    border: '1px solid #4FC3F755',
     borderRadius: '4px',
-    color: '#33ff33',
+    color: '#4FC3F7',
     fontSize: '12px',
-    fontFamily: "'Courier New', monospace",
+    fontFamily: "inherit",
     cursor: 'pointer',
     padding: '6px 20px',
+  },
+  popupToHome: {
+    marginTop: '8px',
+    background: '#101833',
+    border: '1px solid #2E86C1',
+    borderRadius: '4px',
+    color: '#2E86C1',
+    fontSize: '11px',
+    fontFamily: "inherit",
+    cursor: 'pointer',
+    padding: '6px 16px',
+  },
+  sortSection: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center' as const,
+    gap: '4px',
+    marginBottom: '10px',
+  },
+  sortRow: {
+    display: 'flex',
+    alignItems: 'center' as const,
+    gap: '6px',
+  },
+  sortLabel: {
+    fontSize: '10px',
+    color: '#2E86C1',
+    fontFamily: "inherit",
+  },
+  sortChip: {
+    padding: '2px 8px',
+    border: '1px solid #4FC3F733',
+    borderRadius: '10px',
+    background: 'transparent',
+    color: '#2E86C1',
+    fontSize: '10px',
+    fontFamily: "inherit",
+    cursor: 'pointer',
+  },
+  sortChipDisabled: {
+    padding: '2px 8px',
+    border: '1px solid #4FC3F733',
+    borderRadius: '10px',
+    background: 'transparent',
+    color: '#2E86C155',
+    fontSize: '10px',
+    fontFamily: "inherit",
+    cursor: 'not-allowed',
+  },
+  sortHint: {
+    fontSize: '9px',
+    color: '#2E86C1',
+    opacity: 0.6,
+    fontFamily: "inherit",
+  },
+  saveBar: {
+    display: 'flex',
+    justifyContent: 'center' as const,
+    gap: '8px',
+    marginBottom: '10px',
+  },
+  saveButton: {
+    padding: '8px 16px',
+    background: '#101833',
+    border: '1px solid #4FC3F7',
+    borderRadius: '4px',
+    color: '#4FC3F7',
+    fontSize: '12px',
+    fontFamily: "inherit",
+    cursor: 'pointer',
+  },
+  saveButtonDisabled: {
+    padding: '8px 16px',
+    background: '#101833',
+    border: '1px solid #4FC3F733',
+    borderRadius: '4px',
+    color: '#4FC3F755',
+    fontSize: '12px',
+    fontFamily: "inherit",
+    cursor: 'not-allowed',
+  },
+  saveStatus: {
+    fontSize: '10px',
+    color: '#81D4FA',
+    textAlign: 'center' as const,
+    marginBottom: '8px',
   },
 } as const;
 
@@ -159,8 +248,46 @@ export function BoxViewScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const currentBox = Number(searchParams.get('box') ?? 0);
-  const { pokemon, loading } = useSavePokemon(id ?? null);
+  const { pokemon, loading, refresh } = useSavePokemon(id ?? null);
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonRecord | null>(null);
+  const [sendingToHomeId, setSendingToHomeId] = useState<string | null>(null);
+  const [sorting, setSorting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+
+  const handleSaveToFile = async () => {
+    if (!id || saving) return;
+    setSaving(true);
+    setSaveStatus(null);
+    try {
+      const result = await writeBackToLinkedFile(id);
+      if (result === 'written') {
+        setSaveStatus('Saved to Delta file!');
+      } else if (result === 'downloaded') {
+        setSaveStatus('Downloaded save file');
+      } else {
+        setSaveStatus('No save data found');
+      }
+    } catch (e) {
+      setSaveStatus(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveStatus(null), 3000);
+    }
+  };
+
+  const handleSort = async (criteria: BoxSortCriteria) => {
+    if (!id || sorting) return;
+    setSorting(true);
+    try {
+      await reorganizeBoxes(id, criteria);
+      await refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Sort failed');
+    } finally {
+      setSorting(false);
+    }
+  };
 
   // Organize pokemon into box slots
   const boxSlots = useMemo(() => {
@@ -185,7 +312,7 @@ export function BoxViewScreen() {
   if (!id) {
     return (
       <div style={styles.container}>
-        <div style={{ color: '#22aa22', textAlign: 'center', marginTop: '40px' }}>
+        <div style={{ color: '#2E86C1', textAlign: 'center', marginTop: '40px' }}>
           No save ID provided.
         </div>
       </div>
@@ -199,7 +326,7 @@ export function BoxViewScreen() {
         <button style={styles.backButton} onClick={() => navigate(`/saves`)}>
           {'<'} BACK
         </button>
-        <span style={{ fontSize: '12px', color: '#22aa22' }}>
+        <span style={{ fontSize: '12px', color: '#2E86C1' }}>
           {loading ? 'Loading...' : `${pokemon.length} total`}
         </span>
       </div>
@@ -227,6 +354,52 @@ export function BoxViewScreen() {
         {filledCount}/{SLOTS_PER_BOX} slots filled
       </div>
 
+      {/* Sort controls */}
+      <div style={styles.sortSection}>
+        <div style={styles.sortRow}>
+          <span style={styles.sortLabel}>Sort:</span>
+          <button
+            style={sorting ? styles.sortChipDisabled : styles.sortChip}
+            disabled={sorting}
+            onClick={() => handleSort('number')}
+          >
+            #
+          </button>
+          <button
+            style={sorting ? styles.sortChipDisabled : styles.sortChip}
+            disabled={sorting}
+            onClick={() => handleSort('name')}
+          >
+            A-Z
+          </button>
+          <button
+            style={sorting ? styles.sortChipDisabled : styles.sortChip}
+            disabled={sorting}
+            onClick={() => handleSort('level')}
+          >
+            Lv
+          </button>
+          {sorting && (
+            <span style={styles.sortLabel}>Sorting...</span>
+          )}
+        </div>
+        <span style={styles.sortHint}>Reorganizes all boxes</span>
+      </div>
+
+      {/* Save to Delta */}
+      <div style={styles.saveBar}>
+        <button
+          style={saving ? styles.saveButtonDisabled : styles.saveButton}
+          disabled={saving}
+          onClick={handleSaveToFile}
+        >
+          {saving ? 'SAVING...' : supportsWriteback() ? 'SAVE TO DELTA' : 'DOWNLOAD .SAV'}
+        </button>
+      </div>
+      {saveStatus && (
+        <div style={styles.saveStatus}>{saveStatus}</div>
+      )}
+
       {/* Grid */}
       <div style={styles.grid}>
         {boxSlots.map((slot, i) => (
@@ -235,10 +408,10 @@ export function BoxViewScreen() {
             style={styles.cell(slot !== null)}
             onClick={() => { if (slot) setSelectedPokemon(slot); }}
             onMouseEnter={(e) => {
-              if (slot) e.currentTarget.style.borderColor = '#33ff33';
+              if (slot) e.currentTarget.style.borderColor = '#4FC3F7';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(51,255,51,0.15)';
+              e.currentTarget.style.borderColor = 'rgba(79,195,247,0.15)';
             }}
           >
             {slot ? (
@@ -292,6 +465,26 @@ export function BoxViewScreen() {
             <div style={styles.popupInfo}>
               Box {currentBox + 1}, Slot {selectedPokemon.slotIndex + 1}
             </div>
+            {id && (
+              <button
+                style={styles.popupToHome}
+                disabled={sendingToHomeId === selectedPokemon.id}
+                onClick={async () => {
+                  setSendingToHomeId(selectedPokemon.id);
+                  try {
+                    await transferToHome(id, selectedPokemon.id);
+                    await refresh();
+                    setSelectedPokemon(null);
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Transfer failed');
+                  } finally {
+                    setSendingToHomeId(null);
+                  }
+                }}
+              >
+                {sendingToHomeId === selectedPokemon.id ? '...' : 'SEND TO HOME'}
+              </button>
+            )}
             <button
               style={styles.popupClose}
               onClick={() => setSelectedPokemon(null)}

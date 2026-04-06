@@ -18,6 +18,11 @@ export async function addPokemonBatch(pokemon: PokemonRecord[]): Promise<void> {
   await tx.done;
 }
 
+export async function getPokemonById(id: string): Promise<PokemonRecord | undefined> {
+  const db = await getDB();
+  return db.get('pokemon', id);
+}
+
 export async function getPokemonBySave(saveId: string): Promise<PokemonRecord[]> {
   const db = await getDB();
   return db.getAllFromIndex('pokemon', 'by-save', saveId);
@@ -36,6 +41,11 @@ export async function getPokemonByIdentity(identityKey: string): Promise<Pokemon
 export async function getAllPokemon(): Promise<PokemonRecord[]> {
   const db = await getDB();
   return db.getAll('pokemon');
+}
+
+export async function deletePokemon(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('pokemon', id);
 }
 
 export async function deletePokemonBySave(saveId: string): Promise<void> {

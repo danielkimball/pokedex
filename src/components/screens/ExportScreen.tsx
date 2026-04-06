@@ -5,20 +5,20 @@ import { getSaveRawData } from '../../db/save-store';
 
 const screen = {
   padding: '16px',
-  fontFamily: "'Courier New', monospace",
-  color: '#33ff33',
+  fontFamily: "inherit",
+  color: '#4FC3F7',
   minHeight: '100%',
 } as const;
 
 const heading = {
   fontSize: '20px',
   marginBottom: '16px',
-  textShadow: '0 0 8px rgba(51,255,51,0.4)',
+  textShadow: '0 0 8px rgba(79,195,247,0.4)',
 } as const;
 
 const info = {
   fontSize: '13px',
-  color: '#22aa22',
+  color: '#2E86C1',
   marginBottom: '20px',
   lineHeight: '1.6',
 } as const;
@@ -28,20 +28,20 @@ const btn = {
   width: '100%',
   padding: '14px',
   marginBottom: '12px',
-  background: '#1a3a1a',
-  border: '1px solid #33ff33',
+  background: '#101833',
+  border: '1px solid #4FC3F7',
   borderRadius: '6px',
-  color: '#33ff33',
+  color: '#4FC3F7',
   fontSize: '14px',
-  fontFamily: "'Courier New', monospace",
+  fontFamily: "inherit",
   cursor: 'pointer',
   textAlign: 'center' as const,
 } as const;
 
 const btnSecondary = {
   ...btn,
-  border: '1px solid #22aa22',
-  color: '#22aa22',
+  border: '1px solid #2E86C1',
+  color: '#2E86C1',
 } as const;
 
 export function ExportScreen() {
@@ -123,7 +123,7 @@ export function ExportScreen() {
       </button>
 
       {exported && (
-        <p style={{ color: '#66ff66', fontSize: '12px', textAlign: 'center', marginBottom: '16px' }}>
+        <p style={{ color: '#81D4FA', fontSize: '12px', textAlign: 'center', marginBottom: '16px' }}>
           Save file exported successfully!
         </p>
       )}

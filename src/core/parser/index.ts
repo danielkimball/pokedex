@@ -1,7 +1,7 @@
 export { parsePokemon, computeChecksum, STORED_SIZE, PARTY_SIZE } from './pokemon-parser';
 export type { Pokemon, BattleStats } from './pokemon-parser';
-export { detectGameVersion } from './save-detector';
-export type { GameVersion } from './save-detector';
+export { detectGameVersion, detectSpecificGame } from './save-detector';
+export type { GameVersion, SpecificGame } from './save-detector';
 export { readGeneralBlock, readStorageBlock, getBlockConfig } from './block-reader';
 export type { BlockInfo } from './block-reader';
 export { parseTrainerInfo } from './trainer-reader';

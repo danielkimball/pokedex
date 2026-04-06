@@ -70,6 +70,44 @@ export interface DirectoryRecord {
   lastScanTime: number;
 }
 
+/** Pokemon deposited in "Home" storage — generation-agnostic dumping ground for transfer between games. */
+export interface HomePokemonRecord {
+  id: string;
+  identityKey: string;
+  species: number;
+  nickname: string;
+  level: number;
+  pid: number;
+  otId: number;
+  otSid: number;
+  otName: string;
+  isShiny: boolean;
+  isEgg: boolean;
+  nature: number;
+  ability: number;
+  heldItem: number;
+  moves: [number, number, number, number];
+  ivs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
+  evs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
+  originGame?: number;
+  /** Save id this was transferred from */
+  sourceSaveId: string;
+  /** Game version of source (e.g. DP, Pt, HGSS) — supports future generations */
+  sourceGameVersion: string;
+  /** When deposited */
+  depositedAt: number;
+}
+
+export interface BackupRecord {
+  id: string; // UUID
+  saveId: string;
+  timestamp: number;
+  reason: string; // e.g. "box-sort", "transfer-to-home", "transfer-from-home", "manual"
+  trainerName: string;
+  gameVersion: string;
+  rawData: ArrayBuffer;
+}
+
 export interface PokedexDB extends DBSchema {
   saves: {
     key: string;
@@ -104,10 +142,27 @@ export interface PokedexDB extends DBSchema {
     key: string;
     value: DirectoryRecord;
   };
+  home: {
+    key: string;
+    value: HomePokemonRecord;
+    indexes: {
+      'by-species': number;
+      'by-source-save': string;
+      'by-deposited': number;
+    };
+  };
+  backups: {
+    key: string;
+    value: BackupRecord;
+    indexes: {
+      'by-save': string;
+      'by-date': number;
+    };
+  };
 }
 
 const DB_NAME = 'pokedex-db';
-const DB_VERSION = 2;
+const DB_VERSION = 4;
 
 let dbPromise: Promise<IDBPDatabase<PokedexDB>> | null = null;
 
@@ -139,6 +194,19 @@ export function getDB(): Promise<IDBPDatabase<PokedexDB>> {
         if (oldVersion < 2) {
           // Directories store for persisting FileSystemDirectoryHandle
           db.createObjectStore('directories', { keyPath: 'id' });
+        }
+
+        if (oldVersion < 3) {
+          const homeStore = db.createObjectStore('home', { keyPath: 'id' });
+          homeStore.createIndex('by-species', 'species');
+          homeStore.createIndex('by-source-save', 'sourceSaveId');
+          homeStore.createIndex('by-deposited', 'depositedAt');
+        }
+
+        if (oldVersion < 4) {
+          const backupStore = db.createObjectStore('backups', { keyPath: 'id' });
+          backupStore.createIndex('by-save', 'saveId');
+          backupStore.createIndex('by-date', 'timestamp');
         }
       },
     });

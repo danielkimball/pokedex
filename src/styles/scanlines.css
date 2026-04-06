@@ -22,7 +22,7 @@
 
 /* Optional: screen glow effect */
 .screen-glow {
-  box-shadow: inset 0 0 30px rgba(51, 255, 51, 0.05);
+  box-shadow: inset 0 0 30px rgba(79, 195, 247, 0.05);
 }
 
 /* Screen flicker animation (subtle) */

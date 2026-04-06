@@ -8,6 +8,7 @@ import { BoxViewScreen } from './components/screens/BoxViewScreen';
 import { PartyViewScreen } from './components/screens/PartyViewScreen';
 import { DiffResultScreen } from './components/screens/DiffResultScreen';
 import { ExportScreen } from './components/screens/ExportScreen';
+import { PokemonHomeScreen } from './components/screens/PokemonHomeScreen';
 import { useInitializeApp } from './hooks/usePokedexRegistry';
 
 const router = createBrowserRouter([
@@ -22,6 +23,7 @@ const router = createBrowserRouter([
       { path: 'saves/:id/boxes', element: <BoxViewScreen /> },
       { path: 'saves/:id/party', element: <PartyViewScreen /> },
       { path: 'saves/:id/export', element: <ExportScreen /> },
+      { path: 'home', element: <PokemonHomeScreen /> },
       { path: 'diff', element: <DiffResultScreen /> },
     ],
   },

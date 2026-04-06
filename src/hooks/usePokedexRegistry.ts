@@ -2,11 +2,11 @@
  * Hook for accessing and refreshing the Pokedex registry.
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../state/store';
 import { getAllRegistryEntries } from '../db/registry-store';
 import { getAllSaves } from '../db/save-store';
-import { getDirectoryRecord } from '../db/directory-store';
+import { getDirectoryRecord, getFileRecord } from '../db/directory-store';
 import { scanForSaveFiles, getChangedFiles } from '../core/sync/directory-scanner';
 import { importSaveBuffer } from '../state/actions/import-save';
 
@@ -32,6 +32,7 @@ export function useInitializeApp() {
   const setConnectedDirectory = useAppStore(s => s.setConnectedDirectory);
   const setLastSyncTime = useAppStore(s => s.setLastSyncTime);
   const setSyncing = useAppStore(s => s.setSyncing);
+  const lastDeltaSyncRef = useRef<number>(0);
 
   useEffect(() => {
     async function init() {
@@ -46,6 +47,9 @@ export function useInitializeApp() {
 
         // Check for stored directory handle and attempt auto-sync
         await tryAutoSync(saves);
+
+        // Auto-sync delta file handle if one is linked
+        await tryDeltaFileAutoSync();
       } finally {
         setSavesLoading(false);
       }
@@ -96,6 +100,47 @@ export function useInitializeApp() {
       }
     }
 
+    async function tryDeltaFileAutoSync() {
+      try {
+        const fileRecord = await getFileRecord();
+        if (!fileRecord) return;
+
+        const perm = await fileRecord.handle.queryPermission({ mode: 'read' });
+        if (perm !== 'granted') return;
+
+        const file = await fileRecord.handle.getFile();
+        const buffer = await file.arrayBuffer();
+        await importSaveBuffer(buffer, file.name);
+
+        lastDeltaSyncRef.current = Date.now();
+
+        // Refresh saves and registry after successful import
+        const [updatedSaves, updatedEntries] = await Promise.all([
+          getAllSaves(),
+          getAllRegistryEntries(),
+        ]);
+        setSaves(updatedSaves);
+        setRegistry(updatedEntries);
+      } catch {
+        // Delta file auto-sync failed silently — user can manually refresh later
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState !== 'visible') return;
+
+      // Debounce: skip if last sync was less than 5 seconds ago
+      const now = Date.now();
+      if (now - lastDeltaSyncRef.current < 5000) return;
+
+      tryDeltaFileAutoSync();
+    }
+
     init();
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [setSaves, setSavesLoading, setRegistry, setConnectedDirectory, setLastSyncTime, setSyncing]);
 }

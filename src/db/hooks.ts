@@ -47,14 +47,17 @@ export function useSavePokemon(saveId: string | null) {
   const [pokemon, setPokemon] = useState<PokemonRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  const refresh = useCallback(async () => {
     if (!saveId) { setPokemon([]); return; }
     setLoading(true);
-    getPokemonBySave(saveId).then(data => {
-      setPokemon(data);
-      setLoading(false);
-    });
+    const data = await getPokemonBySave(saveId);
+    setPokemon(data);
+    setLoading(false);
   }, [saveId]);
 
-  return { pokemon, loading };
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { pokemon, loading, refresh };
 }

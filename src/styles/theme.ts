@@ -10,12 +10,12 @@ export const colors = {
   deviceBorder: '#8B0000',
   deviceHinge: '#666666',
 
-  // Screen
-  screenBg: '#1a2a1a',
-  screenBgLight: '#2a3a2a',
-  screenText: '#33ff33',
-  screenTextDim: '#22aa22',
-  screenTextBright: '#66ff66',
+  // Screen — anime-style blue digital display
+  screenBg: '#101822',
+  screenBgLight: '#182030',
+  screenText: '#4FC3F7',
+  screenTextDim: '#2E86C1',
+  screenTextBright: '#81D4FA',
 
   // LED indicators
   ledBlue: '#3399ff',

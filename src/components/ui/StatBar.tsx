@@ -5,7 +5,7 @@ interface StatBarProps {
   color?: string;
 }
 
-export function StatBar({ label, value, max, color = '#33ff33' }: StatBarProps) {
+export function StatBar({ label, value, max, color = '#4FC3F7' }: StatBarProps) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
 
   return (
@@ -14,12 +14,12 @@ export function StatBar({ label, value, max, color = '#33ff33' }: StatBarProps) 
       alignItems: 'center',
       gap: '8px',
       marginBottom: '4px',
-      fontFamily: "'Courier New', monospace",
+      fontFamily: "inherit",
     }}>
       <span style={{
         width: '36px',
         fontSize: '11px',
-        color: '#22aa22',
+        color: '#2E86C1',
         textAlign: 'right',
         flexShrink: 0,
       }}>
@@ -28,7 +28,7 @@ export function StatBar({ label, value, max, color = '#33ff33' }: StatBarProps) 
       <span style={{
         width: '30px',
         fontSize: '11px',
-        color: '#33ff33',
+        color: '#4FC3F7',
         textAlign: 'right',
         flexShrink: 0,
       }}>
@@ -40,7 +40,7 @@ export function StatBar({ label, value, max, color = '#33ff33' }: StatBarProps) 
         background: 'rgba(0,0,0,0.4)',
         borderRadius: '4px',
         overflow: 'hidden',
-        border: '1px solid rgba(51,255,51,0.2)',
+        border: '1px solid rgba(79,195,247,0.2)',
       }}>
         <div style={{
           width: `${pct}%`,
