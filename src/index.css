@@ -9,7 +9,7 @@
   line-height: 1.4;
   font-weight: 400;
   color-scheme: dark;
-  color: #4FC3F7;
+  color: #111111;
   background-color: #0d0d0d;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -31,7 +31,7 @@ body {
 }
 
 a {
-  color: #4FC3F7;
+  color: #111111;
   text-decoration: none;
 }
 
@@ -63,10 +63,10 @@ button {
   width: 4px;
 }
 .pokedex-screen::-webkit-scrollbar-track {
-  background: #101822;
+  background: #f4f1e8;
 }
 .pokedex-screen::-webkit-scrollbar-thumb {
-  background: #4FC3F7;
+  background: #cc0000;
   border-radius: 2px;
 }
 

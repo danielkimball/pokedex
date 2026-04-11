@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAppStore } from '../../state/store';
 import { SPECIES } from '../../core/constants/species';
 import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
-import { EVOLUTIONS, type EvolutionInfo } from '../../core/constants/evolutions';
-import { LOCATIONS, type LocationInfo } from '../../core/constants/locations';
+import { EVOLUTIONS } from '../../core/constants/evolutions';
+import { LOCATIONS } from '../../core/constants/locations';
 import { NATURES, NATURE_EFFECTS } from '../../core/constants/natures';
 import { MOVES } from '../../core/constants/moves';
 import { ABILITIES } from '../../core/constants/abilities';
@@ -14,6 +14,7 @@ import type { PokemonRecord } from '../../db/schema';
 import { TypeBadge } from '../ui/TypeBadge';
 import { getGender } from '../../core/utils/gender';
 import { ORIGIN_GAMES } from '../../core/constants/origin-games';
+import type { PokedexShellContext } from '../layout/PokedexShell';
 
 const SPRITE_URL = (n: number) =>
   `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${n}.png`;
@@ -61,6 +62,7 @@ export function DexEntryScreen() {
   const [statsOpen, setStatsOpen] = useState(true);
   const [pokemonRecords, setPokemonRecords] = useState<PokemonRecord[]>([]);
   const [cardIndex, setCardIndex] = useState(0);
+  const { setActivePanel, setSidePanel } = useOutletContext<PokedexShellContext>();
 
   // ── draggable card track ──────────────────────────────────────────────
   const cardTrackRef = useRef<HTMLDivElement>(null);
@@ -134,25 +136,19 @@ export function DexEntryScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    setCardIndex(0);
-    if (dexNum >= 1 && dexNum <= 493) {
-      getPokemonBySpecies(dexNum).then(records => {
-        if (!cancelled) setPokemonRecords(records);
-      });
-    }
-    return () => { cancelled = true; };
-  }, [dexNum]);
+    const recordsPromise = dexNum >= 1 && dexNum <= 493
+      ? getPokemonBySpecies(dexNum)
+      : Promise.resolve([]);
 
-  if (!dexNum || dexNum < 1 || dexNum > 493) {
-    return (
-      <div style={s.container}>
-        <div style={s.header}>
-          <button style={s.navBtn} onClick={() => navigate('/dex')}>{'<'} BACK</button>
-        </div>
-        <div style={s.notFound}>Invalid Pokedex entry.</div>
-      </div>
-    );
-  }
+    recordsPromise.then(records => {
+      if (cancelled) return;
+      setCardIndex(0);
+      setActivePanel(0);
+      setPokemonRecords(records);
+    });
+
+    return () => { cancelled = true; };
+  }, [dexNum, setActivePanel]);
 
   const name = SPECIES[dexNum] || '???';
   const types = getTypesForSpecies(dexNum);
@@ -177,6 +173,110 @@ export function DexEntryScreen() {
     if (locInfo.platinum?.length) gameLocations.push({ game: 'Platinum', locs: locInfo.platinum });
     if (locInfo.diamond?.length) gameLocations.push({ game: 'Diamond', locs: locInfo.diamond });
     if (locInfo.pearl?.length) gameLocations.push({ game: 'Pearl', locs: locInfo.pearl });
+  }
+
+  const hgLocations = locInfo?.heartgold ?? [];
+  const ssLocations = locInfo?.soulsilver ?? [];
+  const primaryMethod = evoMethod ?? hgLocations[0] ?? ssLocations[0] ?? gameLocations[0]?.locs[0] ?? 'No location data imported yet';
+  const selectedRecord = pokemonRecords[cardIndex] ?? pokemonRecords[0] ?? null;
+  const selectedSaveName = selectedRecord ? saveNameMap.get(selectedRecord.saveId) : null;
+  const selectedOriginGame = selectedRecord?.originGame != null
+    ? ORIGIN_GAMES[selectedRecord.originGame]
+    : selectedSaveName?.match(/\(([^)]+)\)$/)?.[1] ?? null;
+  const selectedStorage = selectedRecord
+    ? selectedRecord.location === 'party'
+      ? `Party slot ${selectedRecord.slotIndex + 1}`
+      : `Box ${selectedRecord.containerIndex + 1}, slot ${selectedRecord.slotIndex + 1}`
+    : 'No saved Pokemon found';
+  const factGame = selectedOriginGame || 'this save';
+
+  useEffect(() => {
+    setSidePanel(
+      <div style={sx.sidePanel}>
+        <div style={sx.panelHeader}>
+          <div>
+            <div style={sx.panelKicker}>DATA PANEL</div>
+            <div style={sx.panelTitle}>{name}</div>
+          </div>
+          <button style={sx.returnBtn} onClick={() => setActivePanel(0)}>MAIN</button>
+        </div>
+
+        <div style={sx.blackDisplay}>
+          <div style={sx.blackDisplayCut}>
+            <img src={SPRITE_URL(dexNum)} alt={name} style={sx.scopeSprite} />
+            <div style={sx.displayList}>
+              <div style={sx.displayItem}><span style={sx.displayLabel}>Current</span><strong style={sx.displayValue}>{selectedStorage}</strong></div>
+              <div style={sx.displayItem}><span style={sx.displayLabel}>Caught</span><strong style={sx.displayValue}>{selectedRecord ? 'Met location not parsed' : 'Unknown'}</strong></div>
+              <div style={sx.displayItem}><span style={sx.displayLabel}>OT</span><strong style={sx.displayValue}>{selectedRecord?.otName || 'Unknown'}</strong></div>
+              <div style={sx.displayItem}><span style={sx.displayLabel}>Origin</span><strong style={sx.displayValue}>{selectedOriginGame || 'Unknown'}</strong></div>
+              <div style={sx.displayItem}><span style={sx.displayLabel}>Save</span><strong style={sx.displayValue}>{selectedSaveName || 'No save linked'}</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div style={sx.statMatrix}>
+          <div style={sx.statRowLabel}>IV</div>
+          {(['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const).map(stat => (
+            <div key={`iv-${stat}`} style={sx.statCell}>
+              <span>{stat.toUpperCase()}</span>
+              <strong>{selectedRecord ? selectedRecord.ivs[stat] : '--'}</strong>
+            </div>
+          ))}
+          <div style={sx.statRowLabel}>EV</div>
+          {(['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const).map(stat => (
+            <div key={`ev-${stat}`} style={sx.statCell}>
+              <span>{stat.toUpperCase()}</span>
+              <strong>{selectedRecord ? selectedRecord.evs[stat] : '--'}</strong>
+            </div>
+          ))}
+        </div>
+
+        <div style={sx.deviceButtons}>
+          <div style={sx.whiteKey} />
+          <div style={sx.whiteKey} />
+          <div style={sx.yellowKey} />
+        </div>
+
+        <div style={sx.factPanel}>
+          <div style={sx.blockTitle}>Field Notes</div>
+          <p style={sx.factText}>
+            Placeholder field note for {name} from {factGame}. Later this can use version-specific flavor text,
+            encounter method notes, or route memories if the save parser exposes met-location data.
+          </p>
+          <p style={sx.factText}>
+            Catch target: {primaryMethod}
+          </p>
+        </div>
+
+        <div style={sx.swipeHint}>Swipe right to return</div>
+      </div>
+    );
+
+    return () => setSidePanel(null);
+  }, [
+    cardIndex,
+    dexNum,
+    factGame,
+    name,
+    pokemonRecords,
+    primaryMethod,
+    selectedOriginGame,
+    selectedRecord,
+    selectedSaveName,
+    selectedStorage,
+    setActivePanel,
+    setSidePanel,
+  ]);
+
+  if (!dexNum || dexNum < 1 || dexNum > 493) {
+    return (
+      <div style={s.container}>
+        <div style={s.header}>
+          <button style={s.navBtn} onClick={() => navigate('/dex')}>{'<'} BACK</button>
+        </div>
+        <div style={s.notFound}>Invalid Pokedex entry.</div>
+      </div>
+    );
   }
 
   return (
@@ -212,9 +312,9 @@ export function DexEntryScreen() {
           </div>
           <span style={{
             ...s.caughtBadge,
-            background: isCaught ? 'rgba(79,195,247,0.15)' : 'rgba(255,68,68,0.1)',
-            borderColor: isCaught ? '#4FC3F7' : '#ff444466',
-            color: isCaught ? '#4FC3F7' : '#ff6666',
+            background: isCaught ? 'rgba(40,120,64,0.12)' : 'rgba(204,0,0,0.08)',
+            borderColor: isCaught ? '#287840' : '#cc000066',
+            color: isCaught ? '#287840' : '#9b0014',
           }}>
             {isCaught ? 'CAUGHT' : 'MISSING'}
           </span>
@@ -229,22 +329,7 @@ export function DexEntryScreen() {
 
         {/* Pokemon stats carousel */}
         {isCaught && pokemonRecords.length > 0 && (() => {
-          const pkmn = pokemonRecords[cardIndex];
-          if (!pkmn) return null;
-          const natureEffect = NATURE_EFFECTS[pkmn.nature];
-          const natureName = NATURES[pkmn.nature] || '???';
-          const natureLabel = natureEffect?.increased
-            ? `${natureName} (+${natureEffect.increased} -${natureEffect.decreased})`
-            : natureName;
-          const abilityName = ABILITIES[pkmn.ability] || `Ability #${pkmn.ability}`;
-          const heldItem = getItemName(pkmn.heldItem);
-          const moves = pkmn.moves
-            .filter(m => m !== 0)
-            .map(m => MOVES[m] || `Move #${m}`);
-          const saveName = saveNameMap.get(pkmn.saveId) || 'Unknown Save';
-          const loc = pkmn.location === 'party'
-            ? `Party slot ${pkmn.slotIndex + 1}`
-            : `Box ${pkmn.containerIndex + 1}, slot ${pkmn.slotIndex + 1}`;
+          if (!pokemonRecords[cardIndex]) return null;
           const total = pokemonRecords.length;
 
           return (
@@ -348,7 +433,7 @@ export function DexEntryScreen() {
                   };
 
                   return (
-                    <div style={{ overflow: 'hidden' }}>
+                    <div style={{ overflow: 'hidden' }} data-card-carousel="true">
                       <div
                         ref={cardTrackRef}
                         style={{ display: 'flex', transform: 'translateX(-100%)', willChange: 'transform' }}
@@ -415,8 +500,8 @@ export function DexEntryScreen() {
                     <div
                       style={{
                         ...s.evoCard,
-                        borderColor: isCurrentPokemon ? '#4FC3F7' : '#4FC3F733',
-                        background: isCurrentPokemon ? 'rgba(79,195,247,0.08)' : 'transparent',
+                        borderColor: isCurrentPokemon ? '#cc0000' : '#22222233',
+                        background: isCurrentPokemon ? 'rgba(204,0,0,0.08)' : 'transparent',
                         cursor: isCurrentPokemon ? 'default' : 'pointer',
                       }}
                       onClick={() => {
@@ -429,7 +514,7 @@ export function DexEntryScreen() {
                       <img src={SPRITE_URL(speciesNum)} alt={speciesName} style={s.evoSprite} />
                       <span style={{
                         ...s.evoName,
-                        color: speciesCaught ? '#4FC3F7' : '#2E86C188',
+                        color: speciesCaught ? '#111111' : '#777777',
                       }}>
                         {speciesName}
                       </span>
@@ -442,7 +527,7 @@ export function DexEntryScreen() {
             {/* Branching evolutions (Eevee etc.) */}
             {evolvesTo && evolvesTo.length > 1 && (
               <div style={{ marginTop: '8px' }}>
-                <div style={{ fontSize: '10px', color: '#2E86C1', marginBottom: '4px' }}>Evolves into:</div>
+                <div style={{ fontSize: '10px', color: '#555555', marginBottom: '4px' }}>Evolves into:</div>
                 {evolvesTo.map(evo => {
                   const evoName = SPECIES[evo.species] || '???';
                   const evoCaught = registryMap.get(evo.species)?.caught ?? false;
@@ -453,10 +538,10 @@ export function DexEntryScreen() {
                       onClick={() => { navigate(`/dex/${evo.species}`); scrollRef.current?.scrollTo(0, 0); }}
                     >
                       <img src={SPRITE_URL(evo.species)} alt={evoName} style={s.branchSprite} />
-                      <span style={{ fontSize: '11px', color: evoCaught ? '#4FC3F7' : '#2E86C1', flex: 1 }}>
+                      <span style={{ fontSize: '11px', color: evoCaught ? '#111111' : '#666666', flex: 1 }}>
                         {evoName}
                       </span>
-                      <span style={{ fontSize: '10px', color: '#2E86C188' }}>{evo.method}</span>
+                      <span style={{ fontSize: '10px', color: '#777777' }}>{evo.method}</span>
                     </div>
                   );
                 })}
@@ -498,7 +583,7 @@ export function DexEntryScreen() {
         {/* If no game location data and not caught */}
         {gameLocations.length === 0 && !LOCATIONS && !isCaught && (
           <div style={s.section}>
-            <div style={{ fontSize: '11px', color: '#2E86C166', textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#777777', textAlign: 'center' }}>
               Import a save file containing this Pokemon to register it.
             </div>
           </div>
@@ -520,14 +605,14 @@ const s = {
     justifyContent: 'space-between' as const,
     alignItems: 'center' as const,
     padding: '6px 10px',
-    borderBottom: '1px solid #4FC3F722',
+    borderBottom: '1px solid #22222222',
     flexShrink: 0,
   },
   navBtn: {
     background: 'none',
-    border: '1px solid #4FC3F733',
+    border: '1px solid #22222233',
     borderRadius: '4px',
-    color: '#4FC3F7',
+    color: '#111111',
     fontSize: '12px',
     fontFamily: "inherit",
     cursor: 'pointer',
@@ -543,6 +628,7 @@ const s = {
     overflowX: 'hidden' as const,
     minHeight: 0,
     padding: '10px',
+    WebkitOverflowScrolling: 'touch' as const,
   },
   spriteSection: {
     display: 'flex',
@@ -558,13 +644,13 @@ const s = {
   },
   dexNumber: {
     fontSize: '11px',
-    color: '#2E86C1',
+    color: '#666666',
   },
   pokemonName: {
     fontSize: '20px',
     fontWeight: 'bold' as const,
-    color: '#4FC3F7',
-    textShadow: '0 0 6px rgba(79,195,247,0.3)',
+    color: '#111111',
+    textShadow: 'none',
   },
   typeRow: {
     display: 'flex',
@@ -584,16 +670,16 @@ const s = {
   },
   infoLine: {
     fontSize: '10px',
-    color: '#2E86C188',
+    color: '#666666',
     marginBottom: '8px',
     paddingLeft: '2px',
   },
   section: {
     padding: '8px',
-    border: '1px solid #4FC3F722',
+    border: '1px solid #22222222',
     borderRadius: '4px',
     marginBottom: '8px',
-    background: 'rgba(0,0,0,0.15)',
+    background: 'rgba(255,255,255,0.35)',
   },
   sectionToggle: {
     display: 'flex',
@@ -606,11 +692,11 @@ const s = {
   },
   toggleArrow: {
     fontSize: '8px',
-    color: '#2E86C1',
+    color: '#555555',
   },
   sectionTitle: {
     fontSize: '10px',
-    color: '#2E86C1',
+    color: '#555555',
     textTransform: 'uppercase' as const,
     letterSpacing: '1px',
   },
@@ -618,12 +704,12 @@ const s = {
     display: 'flex',
     justifyContent: 'space-between' as const,
     fontSize: '11px',
-    color: '#4FC3F7',
+    color: '#111111',
     padding: '3px 0',
-    borderBottom: '1px solid rgba(79,195,247,0.06)',
+    borderBottom: '1px solid rgba(0,0,0,0.08)',
   },
   locDetail: {
-    color: '#2E86C1',
+    color: '#555555',
     fontSize: '10px',
   },
   evoChain: {
@@ -640,13 +726,13 @@ const s = {
   },
   evoMethod: {
     fontSize: '9px',
-    color: '#2E86C188',
+    color: '#666666',
     padding: '2px 0',
     textAlign: 'center' as const,
   },
   evoArrow: {
     fontSize: '10px',
-    color: '#4FC3F744',
+    color: '#999999',
     padding: '1px 0',
   },
   evoCard: {
@@ -671,7 +757,7 @@ const s = {
   },
   evoDot: {
     fontSize: '10px',
-    color: '#4FC3F7',
+    color: '#111111',
     flexShrink: 0,
   },
   branchRow: {
@@ -679,7 +765,7 @@ const s = {
     alignItems: 'center' as const,
     gap: '6px',
     padding: '3px 4px',
-    borderBottom: '1px solid rgba(79,195,247,0.06)',
+    borderBottom: '1px solid rgba(0,0,0,0.08)',
     cursor: 'pointer',
   },
   branchSprite: {
@@ -690,20 +776,191 @@ const s = {
   },
   gameName: {
     fontSize: '11px',
-    color: '#4FC3F7',
+    color: '#111111',
     fontWeight: 'bold' as const,
     marginBottom: '2px',
   },
   locationLine: {
     fontSize: '10px',
-    color: '#2E86C1',
+    color: '#555555',
     padding: '1px 0 1px 8px',
   },
   notFound: {
     textAlign: 'center' as const,
-    color: '#2E86C1',
+    color: '#555555',
     fontSize: '14px',
     marginTop: '40px',
+  },
+} as const;
+
+/** Styles for the anime-inspired right-side Pokedex panel */
+const sx = {
+  sidePanel: {
+    height: '100%',
+    overflowY: 'auto' as const,
+    overflowX: 'hidden' as const,
+    padding: '8px',
+    background: '#b80018',
+    color: '#f4f1e8',
+    WebkitOverflowScrolling: 'touch' as const,
+  },
+  panelHeader: {
+    display: 'flex',
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: '7px',
+    paddingBottom: '6px',
+    borderBottom: '2px solid rgba(49,0,6,0.55)',
+  },
+  panelKicker: {
+    fontSize: '9px',
+    color: '#f6d54a',
+    letterSpacing: '1px',
+    textTransform: 'uppercase' as const,
+  },
+  panelTitle: {
+    color: '#f5fbff',
+    fontSize: '19px',
+    fontWeight: 'bold' as const,
+    lineHeight: 1.1,
+    textShadow: '0 2px 0 rgba(0,0,0,0.35)',
+  },
+  returnBtn: {
+    color: '#101010',
+    background: '#f6d54a',
+    border: '2px solid #5d4200',
+    borderRadius: '5px',
+    fontSize: '11px',
+    fontWeight: 'bold' as const,
+    padding: '6px 10px',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45), 0 2px 0 rgba(0,0,0,0.28)',
+  },
+  blackDisplay: {
+    padding: '8px',
+    marginBottom: '8px',
+    borderRadius: '6px',
+    background: '#8f0014',
+    border: '3px solid #5c000d',
+    boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -4px 0 rgba(0,0,0,0.16)',
+  },
+  blackDisplayCut: {
+    minHeight: '132px',
+    padding: '8px 10px 18px',
+    display: 'flex',
+    alignItems: 'center' as const,
+    gap: '10px',
+    background: 'linear-gradient(135deg, #101013 0%, #101013 72%, transparent 72%)',
+    border: '3px solid #3d0009',
+    clipPath: 'polygon(0 0, 100% 0, 100% 72%, 84% 100%, 0 100%)',
+  },
+  scopeSprite: {
+    width: '68px',
+    height: '68px',
+    imageRendering: 'pixelated' as const,
+    filter: 'drop-shadow(0 0 8px rgba(126,215,246,0.45))',
+    flexShrink: 0,
+  },
+  displayList: {
+    display: 'grid',
+    gap: '5px',
+    minWidth: 0,
+    flex: 1,
+  },
+  displayItem: {
+    display: 'grid',
+    gap: '1px',
+  },
+  displayLabel: {
+    color: '#8bdff0',
+    fontSize: '8px',
+    letterSpacing: '1px',
+    textTransform: 'uppercase' as const,
+  },
+  displayValue: {
+    color: '#f4f1e8',
+    fontSize: '10px',
+    lineHeight: 1.15,
+  },
+  statMatrix: {
+    display: 'grid',
+    gridTemplateColumns: '22px repeat(6, minmax(0, 1fr))',
+    gap: '3px',
+    marginBottom: '8px',
+  },
+  statRowLabel: {
+    minHeight: '29px',
+    display: 'grid',
+    placeItems: 'center',
+    color: '#f4f1e8',
+    fontSize: '9px',
+    fontWeight: 'bold' as const,
+    background: '#5c000d',
+    border: '2px solid #3d0009',
+    borderRadius: '4px',
+  },
+  statCell: {
+    minHeight: '29px',
+    padding: '2px 1px',
+    background: 'linear-gradient(180deg, #8bdff0 0%, #45abc9 100%)',
+    border: '2px solid #255f72',
+    borderRadius: '4px',
+    color: '#092b34',
+    display: 'grid',
+    alignContent: 'center' as const,
+    gap: '2px',
+    fontSize: '8px',
+    lineHeight: 1,
+    textAlign: 'center' as const,
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5)',
+  },
+  deviceButtons: {
+    display: 'flex',
+    alignItems: 'center' as const,
+    gap: '6px',
+    margin: '7px 0 9px',
+  },
+  whiteKey: {
+    width: '42px',
+    height: '20px',
+    background: '#f4f1e8',
+    border: '2px solid #65575a',
+    borderRadius: '4px',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8), 0 2px 0 rgba(0,0,0,0.25)',
+  },
+  yellowKey: {
+    marginLeft: 'auto',
+    width: '31px',
+    height: '31px',
+    borderRadius: '50%',
+    background: 'radial-gradient(circle at 35% 30%, #fff4a0 0%, #f6d54a 45%, #a87600 100%)',
+    border: '2px solid #5d4200',
+    boxShadow: '0 0 10px rgba(246,213,74,0.45)',
+  },
+  factPanel: {
+    marginBottom: '10px',
+    padding: '9px',
+    borderRadius: '6px',
+    background: 'rgba(22, 7, 10, 0.56)',
+    border: '2px solid rgba(246,213,74,0.28)',
+  },
+  blockTitle: {
+    color: '#f6d54a',
+    fontSize: '10px',
+    letterSpacing: '1px',
+    textTransform: 'uppercase' as const,
+    marginBottom: '6px',
+  },
+  factText: {
+    color: '#f5fbff',
+    fontSize: '12px',
+    lineHeight: 1.35,
+    margin: '0 0 8px',
+  },
+  swipeHint: {
+    color: 'rgba(245,251,255,0.68)',
+    fontSize: '10px',
+    textAlign: 'center' as const,
+    paddingBottom: '4px',
   },
 } as const;
 
