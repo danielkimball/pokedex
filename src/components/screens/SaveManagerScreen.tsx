@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../state/store';
 import { deleteSave } from '../../db/save-store';
 import { listBackups, downloadBackup, restoreBackup, deleteBackup } from '../../db/backup-store';
 import { writeBackToLinkedFile, supportsWriteback } from '../../state/actions/save-to-file';
 import { StatusLED } from '../ui/StatusLED';
+import { gameLabel, genLabel } from '../../core/constants/games';
 import type { BackupRecord } from '../../db/schema';
 
 const styles = {
@@ -307,7 +308,9 @@ export function SaveManagerScreen() {
               <StatusLED color="green" />
               <span style={styles.trainerName}>{save.trainerName}</span>
             </div>
-            <span style={styles.gameVersion}>{save.gameVersion}</span>
+            <span style={styles.gameVersion}>
+              {gameLabel(save)}{save.generation ? ` · ${genLabel(save.generation)}` : ''}
+            </span>
           </div>
 
           {/* Info rows */}
@@ -436,7 +439,7 @@ export function SaveManagerScreen() {
           <div style={styles.confirmBox} onClick={(e) => e.stopPropagation()}>
             <div style={styles.confirmTitle}>DELETE SAVE?</div>
             <div style={styles.confirmText}>
-              Remove &quot;{saveToDelete.trainerName} ({saveToDelete.gameVersion})&quot;?
+              Remove &quot;{saveToDelete.trainerName} ({gameLabel(saveToDelete)})&quot;?
               <br />
               This cannot be undone.
             </div>

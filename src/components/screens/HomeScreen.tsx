@@ -12,6 +12,7 @@ import {
   type FileRecord,
 } from '../../db/directory-store';
 import { SPECIES } from '../../core/constants/species';
+import { gameLabel } from '../../core/constants/games';
 
 const SPRITE_URL = (n: number) =>
   `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${n}.png`;
@@ -920,7 +921,7 @@ export function HomeScreen() {
           <div style={styles.progressLabel}>SAVE FILES</div>
           {saves.map(save => (
             <div key={save.id} style={styles.infoRow}>
-              <span>{save.trainerName} ({save.gameVersion})</span>
+              <span>{save.trainerName} ({gameLabel(save)})</span>
               <span>{save.totalPokemon} mon</span>
             </div>
           ))}

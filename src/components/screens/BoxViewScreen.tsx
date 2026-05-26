@@ -7,10 +7,8 @@ import { TypeBadge } from '../ui/TypeBadge';
 import { transferToHome } from '../../state/actions/transfer';
 import { reorganizeBoxes, type BoxSortCriteria } from '../../state/actions/reorganize-boxes';
 import { writeBackToLinkedFile, supportsWriteback } from '../../state/actions/save-to-file';
+import { spriteUrl, defaultSpriteUrl } from '../../core/constants/games';
 import type { PokemonRecord } from '../../db/schema';
-
-const SPRITE_URL = (n: number) =>
-  `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${n}.png`;
 
 const BOXES_TOTAL = 18;
 const COLS = 6;
@@ -416,12 +414,14 @@ export function BoxViewScreen() {
           >
             {slot ? (
               <img
-                src={SPRITE_URL(slot.species)}
+                src={spriteUrl(slot.species, slot.game, slot.isShiny)}
                 alt={SPECIES[slot.species] || '?'}
                 style={styles.cellSprite}
                 loading="lazy"
                 onError={(e) => {
-                  e.currentTarget.style.display = 'none';
+                  const d = defaultSpriteUrl(slot.species);
+                  if (e.currentTarget.src !== d) e.currentTarget.src = d;
+                  else e.currentTarget.style.display = 'none';
                 }}
               />
             ) : (
@@ -436,9 +436,13 @@ export function BoxViewScreen() {
         <div style={styles.overlay} onClick={() => setSelectedPokemon(null)}>
           <div style={styles.popup} onClick={(e) => e.stopPropagation()}>
             <img
-              src={SPRITE_URL(selectedPokemon.species)}
+              src={spriteUrl(selectedPokemon.species, selectedPokemon.game, selectedPokemon.isShiny)}
               alt={SPECIES[selectedPokemon.species]}
               style={styles.popupSprite}
+              onError={(e) => {
+                const d = defaultSpriteUrl(selectedPokemon.species);
+                if (e.currentTarget.src !== d) e.currentTarget.src = d;
+              }}
             />
             <div style={styles.popupName}>
               {selectedPokemon.nickname || SPECIES[selectedPokemon.species]}

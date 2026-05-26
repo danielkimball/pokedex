@@ -6,10 +6,8 @@ import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { TypeBadge } from '../ui/TypeBadge';
 import { StatBar } from '../ui/StatBar';
 import { transferToHome } from '../../state/actions/transfer';
+import { spriteUrl, defaultSpriteUrl } from '../../core/constants/games';
 import type { PokemonRecord } from '../../db/schema';
-
-const SPRITE_URL = (n: number) =>
-  `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${n}.png`;
 
 const styles = {
   container: {
@@ -176,11 +174,15 @@ function PartyCard({
     <div style={styles.card}>
       <div style={styles.spriteCol}>
         <img
-          src={SPRITE_URL(mon.species)}
+          src={spriteUrl(mon.species, mon.game, mon.isShiny)}
           alt={name}
           style={styles.sprite}
           loading="lazy"
-          onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+          onError={(e) => {
+            const d = defaultSpriteUrl(mon.species);
+            if (e.currentTarget.src !== d) e.currentTarget.src = d;
+            else e.currentTarget.style.visibility = 'hidden';
+          }}
         />
         <span style={styles.slotNum}>Slot {slotIndex + 1}</span>
       </div>

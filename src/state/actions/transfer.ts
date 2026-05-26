@@ -43,6 +43,8 @@ function toHomeRecord(
     ivs: record.ivs,
     evs: record.evs,
     originGame: record.originGame,
+    game: record.game,
+    generation: record.generation,
     sourceSaveId,
     sourceGameVersion,
     depositedAt: Date.now(),

@@ -14,10 +14,18 @@ import type { PokemonRecord } from '../../db/schema';
 import { TypeBadge } from '../ui/TypeBadge';
 import { getGender } from '../../core/utils/gender';
 import { ORIGIN_GAMES } from '../../core/constants/origin-games';
+import { spriteUrl, defaultSpriteUrl, gameLabel, genLabel } from '../../core/constants/games';
 import type { PokedexShellContext } from '../layout/PokedexShell';
 
-const SPRITE_URL = (n: number) =>
-  `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${n}.png`;
+// Species-level sprite (generation-neutral) for the dex identity + evolution chain.
+const SPRITE_URL = (n: number) => defaultSpriteUrl(n);
+
+/** Fall back to the generation-neutral sprite if a versioned sprite 404s. */
+function spriteFallback(e: React.SyntheticEvent<HTMLImageElement>, dex: number) {
+  const img = e.currentTarget;
+  const fallback = defaultSpriteUrl(dex);
+  if (img.src !== fallback) img.src = fallback;
+}
 
 function getTypesForSpecies(speciesIndex: number): string[] {
   const pair = SPECIES_TYPES[speciesIndex];
@@ -154,7 +162,7 @@ export function DexEntryScreen() {
   const types = getTypesForSpecies(dexNum);
   const registry = registryMap.get(dexNum);
   const isCaught = registry?.caught ?? false;
-  const saveNameMap = new Map(saves.map(sv => [sv.id, `${sv.trainerName} (${sv.gameVersion})`]));
+  const saveNameMap = new Map(saves.map(sv => [sv.id, `${sv.trainerName} (${gameLabel(sv)})`]));
 
   // Evolution data
   const evoInfo = EVOLUTIONS?.[dexNum];
@@ -203,7 +211,12 @@ export function DexEntryScreen() {
 
         <div style={sx.blackDisplay}>
           <div style={sx.blackDisplayCut}>
-            <img src={SPRITE_URL(dexNum)} alt={name} style={sx.scopeSprite} />
+            <img
+              src={spriteUrl(dexNum, selectedRecord?.game, selectedRecord?.isShiny)}
+              alt={name}
+              style={sx.scopeSprite}
+              onError={(e) => spriteFallback(e, dexNum)}
+            />
             <div style={sx.displayList}>
               <div style={sx.displayItem}><span style={sx.displayLabel}>Current</span><strong style={sx.displayValue}>{selectedStorage}</strong></div>
               <div style={sx.displayItem}><span style={sx.displayLabel}>Caught</span><strong style={sx.displayValue}>{selectedRecord ? 'Met location not parsed' : 'Unknown'}</strong></div>
@@ -381,7 +394,12 @@ export function DexEntryScreen() {
                           {types.map(t => <TypeBadge key={t} type={t} />)}
                         </div>
                         <div style={st.artFrame}>
-                          <img src={SPRITE_URL(dexNum)} alt={name} style={st.cardSprite} />
+                          <img
+                            src={spriteUrl(dexNum, record.game, record.isShiny)}
+                            alt={name}
+                            style={st.cardSprite}
+                            onError={(e) => spriteFallback(e, dexNum)}
+                          />
                         </div>
                         <div style={st.infoLine}>
                           OT: {record.otName}{originGame ? ` (${originGame})` : ''} {'\u00B7'} {natureLabel} {'\u00B7'} {abilityName}
@@ -427,6 +445,7 @@ export function DexEntryScreen() {
                         </div>
                         <div style={st.flavorBar}>
                           #{String(dexNum).padStart(3, '0')} {'\u00B7'} {saveName}
+                          {record.generation ? ` \u00B7 ${genLabel(record.generation)}` : ''}
                         </div>
                       </div>
                     );

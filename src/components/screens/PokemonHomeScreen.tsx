@@ -8,10 +8,8 @@ import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { TypeBadge } from '../ui/TypeBadge';
 import { StatusLED } from '../ui/StatusLED';
 import { useGoogleDrive } from '../../hooks/useGoogleDrive';
+import { spriteUrl, defaultSpriteUrl, gameLabel, expandFamily } from '../../core/constants/games';
 import type { HomePokemonRecord } from '../../db/schema';
-
-const SPRITE_URL = (n: number) =>
-  `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${n}.png`;
 
 const styles = {
   container: {
@@ -259,7 +257,7 @@ function groupBySpecies(list: HomePokemonRecord[], sortBy: HomeSortOption): { sp
     arr.push(mon);
     bySpecies.set(mon.species, arr);
   }
-  let speciesIds = [...bySpecies.keys()];
+  const speciesIds = [...bySpecies.keys()];
   if (sortBy === 'pokedex') {
     speciesIds.sort((a, b) => a - b);
   } else if (sortBy === 'name') {
@@ -644,11 +642,15 @@ export function PokemonHomeScreen() {
                 >
                   {count > 1 && <span style={styles.gridBadge}>{count}</span>}
                   <img
-                    src={SPRITE_URL(mon.species)}
+                    src={spriteUrl(mon.species, mon.game, mon.isShiny)}
                     alt={name}
                     style={styles.gridSprite}
                     loading="lazy"
-                    onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+                    onError={(e) => {
+                      const d = defaultSpriteUrl(mon.species);
+                      if (e.currentTarget.src !== d) e.currentTarget.src = d;
+                      else e.currentTarget.style.visibility = 'hidden';
+                    }}
                   />
                   <span style={styles.gridLabel}>
                     #{String(mon.species).padStart(3, '0')} {mon.nickname && mon.nickname !== name ? mon.nickname : name}
@@ -677,10 +679,14 @@ export function PokemonHomeScreen() {
                   </button>
                 </div>
                 <img
-                  src={SPRITE_URL(selectedMon.species)}
+                  src={spriteUrl(selectedMon.species, selectedMon.game, selectedMon.isShiny)}
                   alt={SPECIES[selectedMon.species]}
                   style={styles.modalSprite}
-                  onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+                  onError={(e) => {
+                    const d = defaultSpriteUrl(selectedMon.species);
+                    if (e.currentTarget.src !== d) e.currentTarget.src = d;
+                    else e.currentTarget.style.visibility = 'hidden';
+                  }}
                 />
                 <div style={styles.modalRow}>
                   {selectedMon.nickname && selectedMon.nickname !== (SPECIES[selectedMon.species] ?? '') && (
@@ -688,7 +694,7 @@ export function PokemonHomeScreen() {
                   )}
                   <div>Level {selectedMon.level}</div>
                   <div>OT: {selectedMon.otName}</div>
-                  <div>From {selectedMon.sourceGameVersion}</div>
+                  <div>From {selectedMon.game ?? expandFamily(selectedMon.sourceGameVersion)}</div>
                   <div>Deposited {new Date(selectedMon.depositedAt).toLocaleDateString()}</div>
                   <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
                     {getTypesForSpecies(selectedMon.species).map(t => (
@@ -710,7 +716,7 @@ export function PokemonHomeScreen() {
                     <option value="">Select save file</option>
                     {saves.map(s => (
                       <option key={s.id} value={s.id}>
-                        {s.trainerName} ({s.gameVersion})
+                        {s.trainerName} ({gameLabel(s)})
                       </option>
                     ))}
                   </select>

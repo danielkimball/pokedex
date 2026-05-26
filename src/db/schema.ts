@@ -13,7 +13,11 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 export interface SaveRecord {
   id: string; // UUID
   filename: string;
-  gameVersion: string;
+  gameVersion: string; // legacy family code (e.g. HGSS); kept for back-compat
+  /** Specific game this save is from (e.g. "SoulSilver", "Silver"). */
+  game?: string;
+  /** Generation 1-4. Absent on records imported before multi-gen support. */
+  generation?: number;
   trainerName: string;
   trainerId: number;
   secretId: number;
@@ -46,6 +50,10 @@ export interface PokemonRecord {
   ivs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
   evs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
   originGame?: number;
+  /** Specific game this Pokemon's save is from (drives the card's sprite + label). */
+  game?: string;
+  /** Generation 1-4 of the source save. */
+  generation?: number;
 }
 
 export interface RegistryEntry {
@@ -90,6 +98,10 @@ export interface HomePokemonRecord {
   ivs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
   evs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
   originGame?: number;
+  /** Specific source game (e.g. "SoulSilver") — drives the card sprite. */
+  game?: string;
+  /** Generation 1-4 of the source save. */
+  generation?: number;
   /** Save id this was transferred from */
   sourceSaveId: string;
   /** Game version of source (e.g. DP, Pt, HGSS) — supports future generations */

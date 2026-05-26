@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../state/store';
 import { getSaveRawData } from '../../db/save-store';
+import { gameLabel } from '../../core/constants/games';
 
 const screen = {
   padding: '16px',
@@ -109,7 +110,7 @@ export function ExportScreen() {
 
       <div style={info}>
         <div>Trainer: {save.trainerName}</div>
-        <div>Game: {save.gameVersion}</div>
+        <div>Game: {gameLabel(save)}</div>
         <div>File: {save.filename}</div>
         <div>Pokemon: {save.totalPokemon}</div>
       </div>
