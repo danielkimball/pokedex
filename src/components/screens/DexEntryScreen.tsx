@@ -14,7 +14,7 @@ import type { PokemonRecord } from '../../db/schema';
 import { TypeBadge } from '../ui/TypeBadge';
 import { getGender } from '../../core/utils/gender';
 import { ORIGIN_GAMES } from '../../core/constants/origin-games';
-import { spriteUrl, defaultSpriteUrl, monSpriteUrl, gameLabel, genLabel } from '../../core/constants/games';
+import { spriteUrl, defaultSpriteUrl, monSpriteUrl, gen1CardArt, gameLabel, genLabel } from '../../core/constants/games';
 import type { PokedexShellContext } from '../layout/PokedexShell';
 
 // Species-level sprite (generation-neutral) for the dex identity + evolution chain.
@@ -382,6 +382,7 @@ export function DexEntryScreen() {
                       : `Box ${record.containerIndex + 1}, slot ${record.slotIndex + 1}`;
                     const gender = getGender(record.species, record.pid);
                     const originGame = record.originGame != null ? ORIGIN_GAMES[record.originGame] : null;
+                    const tcgArt = gen1CardArt(record.species, record.generation);
 
                     return (
                       <div style={{ ...st.cardOuter, background: cardBg }}>
@@ -393,13 +394,22 @@ export function DexEntryScreen() {
                           <span style={st.hpLevel}>Lv.{record.level}</span>
                           {types.map(t => <TypeBadge key={t} type={t} />)}
                         </div>
-                        <div style={st.artFrame}>
-                          <img
-                            src={monSpriteUrl(record)}
-                            alt={name}
-                            style={st.cardSprite}
-                            onError={(e) => spriteFallback(e, dexNum)}
-                          />
+                        <div style={tcgArt ? st.artFrameTcg : st.artFrame}>
+                          {tcgArt ? (
+                            <img
+                              src={tcgArt}
+                              alt={name}
+                              style={st.tcgArt}
+                              onError={(e) => { e.currentTarget.src = monSpriteUrl(record); }}
+                            />
+                          ) : (
+                            <img
+                              src={monSpriteUrl(record)}
+                              alt={name}
+                              style={st.cardSprite}
+                              onError={(e) => spriteFallback(e, dexNum)}
+                            />
+                          )}
                         </div>
                         <div style={st.infoLine}>
                           OT: {record.otName}{originGame ? ` (${originGame})` : ''} {'\u00B7'} {natureLabel} {'\u00B7'} {abilityName}
@@ -1113,6 +1123,21 @@ const st = {
     width: '90px',
     height: '90px',
     imageRendering: 'pixelated' as const,
+  },
+  /* Original TCG illustration fills a landscape art window (its painted scene shows) */
+  artFrameTcg: {
+    border: '3px solid #C8A82C',
+    borderRadius: '3px',
+    overflow: 'hidden' as const,
+    marginBottom: '3px',
+    background: '#000',
+    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.18)',
+  },
+  tcgArt: {
+    width: '100%',
+    aspectRatio: '142 / 100',
+    objectFit: 'cover' as const,
+    display: 'block' as const,
   },
 
   /* ── Info line below art ── */

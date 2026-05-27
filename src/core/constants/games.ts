@@ -66,6 +66,18 @@ export function defaultSpriteUrl(dex: number): string {
   return `${SPRITE_BASE}/${dex}.png`;
 }
 
+import { GEN1_CARD_ART } from './gen1-card-art';
+
+/**
+ * Original WotC TCG illustration (Base/Jungle/Fossil) for a Gen 1 species, if one
+ * exists — the painted card art with its scene, dropped into the card's art window.
+ * Returns null for species with no early-set card (falls back to the sprite).
+ */
+export function gen1CardArt(species: number, generation?: number | null): string | null {
+  if (generation !== 1) return null;
+  return GEN1_CARD_ART[species] ?? null;
+}
+
 const SURF_MOVE_ID = 57;
 const PIKACHU_DEX = 25;
 /** Local asset: the Gen 1 Pikachu's-Beach surfing-Pikachu sprite. */
