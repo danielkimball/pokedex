@@ -66,6 +66,37 @@ export function defaultSpriteUrl(dex: number): string {
   return `${SPRITE_BASE}/${dex}.png`;
 }
 
+const SURF_MOVE_ID = 57;
+const PIKACHU_DEX = 25;
+/** Local asset: the Gen 1 Pikachu's-Beach surfing-Pikachu sprite. */
+const SURFING_PIKACHU_SPRITE = '/sprites/pikachu-surf.png';
+
+/** Minimal shape needed to pick a Pokemon's card sprite. */
+export interface SpriteSource {
+  species: number;
+  game?: string | null;
+  generation?: number | null;
+  isShiny?: boolean;
+  moves?: number[];
+}
+
+/**
+ * Card sprite for a specific Pokemon, including Easter eggs.
+ *
+ * Easter egg: a Gen 1 Pikachu that knows Surf (the Pokemon Yellow "Pikachu's
+ * Beach" surfing Pikachu) rides a surfboard instead of using its normal sprite.
+ */
+export function monSpriteUrl(rec: SpriteSource): string {
+  if (
+    rec.species === PIKACHU_DEX &&
+    rec.generation === 1 &&
+    rec.moves?.includes(SURF_MOVE_ID)
+  ) {
+    return SURFING_PIKACHU_SPRITE;
+  }
+  return spriteUrl(rec.species, rec.game, rec.isShiny);
+}
+
 export function generationOf(game: Game): number {
   return GAME_INFO[game].generation;
 }

@@ -7,7 +7,7 @@ import { TypeBadge } from '../ui/TypeBadge';
 import { transferToHome } from '../../state/actions/transfer';
 import { reorganizeBoxes, type BoxSortCriteria } from '../../state/actions/reorganize-boxes';
 import { writeBackToLinkedFile, supportsWriteback } from '../../state/actions/save-to-file';
-import { spriteUrl, defaultSpriteUrl } from '../../core/constants/games';
+import { monSpriteUrl, defaultSpriteUrl } from '../../core/constants/games';
 import type { PokemonRecord } from '../../db/schema';
 
 const BOXES_TOTAL = 18;
@@ -414,7 +414,7 @@ export function BoxViewScreen() {
           >
             {slot ? (
               <img
-                src={spriteUrl(slot.species, slot.game, slot.isShiny)}
+                src={monSpriteUrl(slot)}
                 alt={SPECIES[slot.species] || '?'}
                 style={styles.cellSprite}
                 loading="lazy"
@@ -436,7 +436,7 @@ export function BoxViewScreen() {
         <div style={styles.overlay} onClick={() => setSelectedPokemon(null)}>
           <div style={styles.popup} onClick={(e) => e.stopPropagation()}>
             <img
-              src={spriteUrl(selectedPokemon.species, selectedPokemon.game, selectedPokemon.isShiny)}
+              src={monSpriteUrl(selectedPokemon)}
               alt={SPECIES[selectedPokemon.species]}
               style={styles.popupSprite}
               onError={(e) => {

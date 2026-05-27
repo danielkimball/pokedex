@@ -14,7 +14,7 @@ import type { PokemonRecord } from '../../db/schema';
 import { TypeBadge } from '../ui/TypeBadge';
 import { getGender } from '../../core/utils/gender';
 import { ORIGIN_GAMES } from '../../core/constants/origin-games';
-import { spriteUrl, defaultSpriteUrl, gameLabel, genLabel } from '../../core/constants/games';
+import { spriteUrl, defaultSpriteUrl, monSpriteUrl, gameLabel, genLabel } from '../../core/constants/games';
 import type { PokedexShellContext } from '../layout/PokedexShell';
 
 // Species-level sprite (generation-neutral) for the dex identity + evolution chain.
@@ -212,7 +212,7 @@ export function DexEntryScreen() {
         <div style={sx.blackDisplay}>
           <div style={sx.blackDisplayCut}>
             <img
-              src={spriteUrl(dexNum, selectedRecord?.game, selectedRecord?.isShiny)}
+              src={selectedRecord ? monSpriteUrl(selectedRecord) : spriteUrl(dexNum)}
               alt={name}
               style={sx.scopeSprite}
               onError={(e) => spriteFallback(e, dexNum)}
@@ -395,7 +395,7 @@ export function DexEntryScreen() {
                         </div>
                         <div style={st.artFrame}>
                           <img
-                            src={spriteUrl(dexNum, record.game, record.isShiny)}
+                            src={monSpriteUrl(record)}
                             alt={name}
                             style={st.cardSprite}
                             onError={(e) => spriteFallback(e, dexNum)}

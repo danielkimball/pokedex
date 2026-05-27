@@ -31,6 +31,8 @@ export interface AppState {
   dexSort: DexSort;
   dexShow: DexShow;
   dexVersion: DexVersion;
+  dexGen: number | null;      // National Dex generation slice (1-4), null = all
+  dexSaveId: string | null;   // focus on a single imported save, null = all
 
   // Directory sync state
   syncSupported: boolean;
@@ -51,6 +53,8 @@ export interface AppState {
   setDexSort: (sort: DexSort) => void;
   setDexShow: (show: DexShow) => void;
   setDexVersion: (version: DexVersion) => void;
+  setDexGen: (gen: number | null) => void;
+  setDexSaveId: (id: string | null) => void;
   setConnectedDirectory: (name: string | null) => void;
   setSyncing: (syncing: boolean) => void;
   setLastSyncTime: (time: number | null) => void;
@@ -91,6 +95,8 @@ export const useAppStore = create<AppState>((set) => ({
   dexSort: 'number' as DexSort,
   dexShow: 'all' as DexShow,
   dexVersion: 'all' as DexVersion,
+  dexGen: null,
+  dexSaveId: null,
   syncSupported: typeof window !== 'undefined' && 'showDirectoryPicker' in window,
   connectedDirectory: null,
   syncing: false,
@@ -112,6 +118,8 @@ export const useAppStore = create<AppState>((set) => ({
   setDexSort: (dexSort) => set({ dexSort }),
   setDexShow: (dexShow) => set({ dexShow }),
   setDexVersion: (dexVersion) => set({ dexVersion }),
+  setDexGen: (dexGen) => set({ dexGen }),
+  setDexSaveId: (dexSaveId) => set({ dexSaveId }),
   setConnectedDirectory: (connectedDirectory) => set({ connectedDirectory }),
   setSyncing: (syncing) => set({ syncing }),
   setLastSyncTime: (lastSyncTime) => set({ lastSyncTime }),

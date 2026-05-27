@@ -11,6 +11,7 @@ import { GEN3_INDEX_TO_DEX } from '../core/constants/species-gen3';
 import {
   spriteUrl,
   defaultSpriteUrl,
+  monSpriteUrl,
   gameLabel,
   expandFamily,
   inferGameFromFilename,
@@ -118,6 +119,24 @@ describe('GB / GBA text decoding', () => {
   it('decodes Gen 3 names', () => {
     // D=0xBE, A=0xBB, N=0xC8, terminator 0xFF
     expect(decodeGBAText(new Uint8Array([0xbe, 0xbb, 0xc8, 0xff, 0x00]), 0, 10)).toBe('DAN');
+  });
+});
+
+describe('monSpriteUrl — Surfing Pikachu Easter egg', () => {
+  it('shows the surfboard sprite for a Gen 1 Pikachu that knows Surf', () => {
+    expect(monSpriteUrl({ species: 25, generation: 1, game: 'Yellow', moves: [84, 57, 39, 86] }))
+      .toBe('/sprites/pikachu-surf.png');
+  });
+  it('uses the normal sprite for a Gen 1 Pikachu that does not know Surf', () => {
+    expect(monSpriteUrl({ species: 25, generation: 1, game: 'Yellow', moves: [84, 21, 39, 86] }))
+      .toBe(spriteUrl(25, 'Yellow'));
+  });
+  it('does not trigger outside Gen 1', () => {
+    expect(monSpriteUrl({ species: 25, generation: 4, game: 'HeartGold', moves: [57] }))
+      .toBe(spriteUrl(25, 'HeartGold'));
+  });
+  it('does not trigger for a non-Pikachu that knows Surf', () => {
+    expect(monSpriteUrl({ species: 9, generation: 1, moves: [57] })).toBe(spriteUrl(9));
   });
 });
 

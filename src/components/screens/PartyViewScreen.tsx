@@ -6,7 +6,7 @@ import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { TypeBadge } from '../ui/TypeBadge';
 import { StatBar } from '../ui/StatBar';
 import { transferToHome } from '../../state/actions/transfer';
-import { spriteUrl, defaultSpriteUrl } from '../../core/constants/games';
+import { monSpriteUrl, defaultSpriteUrl } from '../../core/constants/games';
 import type { PokemonRecord } from '../../db/schema';
 
 const styles = {
@@ -174,7 +174,7 @@ function PartyCard({
     <div style={styles.card}>
       <div style={styles.spriteCol}>
         <img
-          src={spriteUrl(mon.species, mon.game, mon.isShiny)}
+          src={monSpriteUrl(mon)}
           alt={name}
           style={styles.sprite}
           loading="lazy"

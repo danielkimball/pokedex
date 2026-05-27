@@ -6,10 +6,26 @@ import { SPECIES } from '../../core/constants/species';
 import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { LOCATIONS } from '../../core/constants/locations';
 import { getAllPokemon } from '../../db/pokemon-store';
+import { gameLabel, defaultSpriteUrl } from '../../core/constants/games';
 import { TypeBadge } from '../ui/TypeBadge';
 
-const SPRITE_URL = (n: number) =>
-  `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${n}.png`;
+const SPRITE_URL = (n: number) => defaultSpriteUrl(n);
+
+/** National Dex ranges per generation (inclusive). */
+const GEN_RANGES: Record<number, [number, number]> = {
+  1: [1, 151],
+  2: [152, 251],
+  3: [252, 386],
+  4: [387, 493],
+};
+
+const GEN_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: 'All' },
+  { value: 1, label: 'I' },
+  { value: 2, label: 'II' },
+  { value: 3, label: 'III' },
+  { value: 4, label: 'IV' },
+];
 
 function getTypesForSpecies(speciesIndex: number): string[] {
   const pair = SPECIES_TYPES[speciesIndex];
@@ -75,26 +91,53 @@ export function PokedexListScreen() {
   const searchQuery = useAppStore(s => s.searchQuery);
   const setSearchQuery = useAppStore(s => s.setSearchQuery);
   const registryMap = useAppStore(s => s.registryMap);
-  const caughtCount = useAppStore(s => s.caughtCount);
   const dexSort = useAppStore(s => s.dexSort);
   const setDexSort = useAppStore(s => s.setDexSort);
   const dexShow = useAppStore(s => s.dexShow);
   const setDexShow = useAppStore(s => s.setDexShow);
   const dexVersion = useAppStore(s => s.dexVersion);
   const setDexVersion = useAppStore(s => s.setDexVersion);
+  const dexGen = useAppStore(s => s.dexGen);
+  const setDexGen = useAppStore(s => s.setDexGen);
+  const dexSaveId = useAppStore(s => s.dexSaveId);
+  const setDexSaveId = useAppStore(s => s.setDexSaveId);
+  const saves = useAppStore(s => s.saves);
 
-  // Build max-level lookup per species (for level sorting)
+  // Build max-level lookup per species (for level sorting) and the set of
+  // species present in each save (for the per-game filter).
   const [levelMap, setLevelMap] = useState<Map<number, number>>(new Map());
+  const [bySave, setBySave] = useState<Map<string, Set<number>>>(new Map());
   useEffect(() => {
     getAllPokemon().then(records => {
       const map = new Map<number, number>();
+      const saveMap = new Map<string, Set<number>>();
       for (const r of records) {
         const prev = map.get(r.species) ?? 0;
         if (r.level > prev) map.set(r.species, r.level);
+        let set = saveMap.get(r.saveId);
+        if (!set) { set = new Set(); saveMap.set(r.saveId, set); }
+        set.add(r.species);
       }
       setLevelMap(map);
+      setBySave(saveMap);
     });
   }, [registryMap]); // re-fetch when registry changes (new import)
+
+  // Selected save no longer exists (deleted) → reset to all.
+  useEffect(() => {
+    if (dexSaveId && !saves.some(s => s.id === dexSaveId)) setDexSaveId(null);
+  }, [dexSaveId, saves, setDexSaveId]);
+
+  // Species counted as "caught" for the current view: a specific save's roster,
+  // or every caught species across all saves.
+  const caughtSet = useMemo(() => {
+    if (dexSaveId) return bySave.get(dexSaveId) ?? new Set<number>();
+    const set = new Set<number>();
+    for (const [species, entry] of registryMap) {
+      if (entry.caught) set.add(species);
+    }
+    return set;
+  }, [dexSaveId, bySave, registryMap]);
 
   const handleLevelSort = useCallback(() => {
     if (dexSort === 'level-desc') setDexSort('level-asc');
@@ -110,7 +153,9 @@ export function PokedexListScreen() {
     const entries: number[] = [];
     const query = searchQuery.toLowerCase().trim();
 
-    for (let i = 1; i <= 493; i++) {
+    const [lo, hi] = dexGen ? GEN_RANGES[dexGen] : [1, 493];
+
+    for (let i = lo; i <= hi; i++) {
       const name = SPECIES[i];
       if (!name) continue;
 
@@ -124,8 +169,8 @@ export function PokedexListScreen() {
       // Version exclusive filter
       if (dexVersion !== 'all' && !isVersionExclusive(i, dexVersion)) continue;
 
-      // Caught/uncaught filter
-      const isCaught = registryMap.get(i)?.caught ?? false;
+      // Caught/uncaught filter (caught = in the selected save, or anywhere)
+      const isCaught = caughtSet.has(i);
       if (dexShow === 'caught' && !isCaught) continue;
       if (dexShow === 'uncaught' && isCaught) continue;
 
@@ -153,7 +198,7 @@ export function PokedexListScreen() {
     });
 
     return entries;
-  }, [searchQuery, dexSort, dexShow, dexVersion, registryMap, levelMap]);
+  }, [searchQuery, dexSort, dexShow, dexVersion, dexGen, caughtSet, levelMap]);
 
   const rowVirtualizer = useVirtualizer({
     count: filteredEntries.length,
@@ -188,6 +233,14 @@ export function PokedexListScreen() {
       ? `${filteredEntries.length} missing`
       : `${filteredEntries.length} total`;
 
+  // Gen-aware progress for the header (e.g. "37/151" when focused on Gen I).
+  const [genLo, genHi] = dexGen ? GEN_RANGES[dexGen] : [1, 493];
+  const genTotal = genHi - genLo + 1;
+  let caughtInView = 0;
+  for (const sp of caughtSet) if (sp >= genLo && sp <= genHi) caughtInView++;
+
+  const focusedSave = dexSaveId ? saves.find(s => s.id === dexSaveId) : null;
+
   return (
     <div style={s.container}>
       {/* Header */}
@@ -195,7 +248,10 @@ export function PokedexListScreen() {
         <button style={s.backBtn} onClick={() => navigate('/')}>
           {'<'} BACK
         </button>
-        <span style={s.headerCount}>{caughtCount}/493</span>
+        <span style={s.headerCount}>
+          {caughtInView}/{genTotal}
+          {focusedSave ? ` · ${gameLabel(focusedSave)}` : dexGen ? ` · Gen ${GEN_OPTIONS.find(o => o.value === dexGen)?.label}` : ''}
+        </span>
       </div>
 
       {/* Search */}
@@ -250,6 +306,28 @@ export function PokedexListScreen() {
             ))}
           </select>
         </div>
+        <div style={s.controlGroup}>
+          <span style={s.controlLabel}>Gen:</span>
+          {GEN_OPTIONS.map(opt => (
+            <button
+              key={String(opt.value)}
+              style={dexGen === opt.value ? s.chipActive : s.chip}
+              onClick={() => setDexGen(opt.value)}
+            >
+              {opt.label}
+            </button>
+          ))}
+          <select
+            value={dexSaveId ?? ''}
+            onChange={(e) => setDexSaveId(e.target.value || null)}
+            style={s.versionSelect}
+          >
+            <option value="">All games</option>
+            {saves.map(sv => (
+              <option key={sv.id} value={sv.id}>{gameLabel(sv)} — {sv.trainerName}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Result count */}
@@ -267,7 +345,7 @@ export function PokedexListScreen() {
           {rowVirtualizer.getVirtualItems().map((virtualRow) => {
             const dexNum = filteredEntries[virtualRow.index];
             const name = SPECIES[dexNum];
-            const isCaught = registryMap.get(dexNum)?.caught ?? false;
+            const isCaught = caughtSet.has(dexNum);
             const types = getTypesForSpecies(dexNum);
 
             return (

@@ -8,7 +8,7 @@ import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { TypeBadge } from '../ui/TypeBadge';
 import { StatusLED } from '../ui/StatusLED';
 import { useGoogleDrive } from '../../hooks/useGoogleDrive';
-import { spriteUrl, defaultSpriteUrl, gameLabel, expandFamily } from '../../core/constants/games';
+import { monSpriteUrl, defaultSpriteUrl, gameLabel, expandFamily } from '../../core/constants/games';
 import type { HomePokemonRecord } from '../../db/schema';
 
 const styles = {
@@ -642,7 +642,7 @@ export function PokemonHomeScreen() {
                 >
                   {count > 1 && <span style={styles.gridBadge}>{count}</span>}
                   <img
-                    src={spriteUrl(mon.species, mon.game, mon.isShiny)}
+                    src={monSpriteUrl(mon)}
                     alt={name}
                     style={styles.gridSprite}
                     loading="lazy"
@@ -679,7 +679,7 @@ export function PokemonHomeScreen() {
                   </button>
                 </div>
                 <img
-                  src={spriteUrl(selectedMon.species, selectedMon.game, selectedMon.isShiny)}
+                  src={monSpriteUrl(selectedMon)}
                   alt={SPECIES[selectedMon.species]}
                   style={styles.modalSprite}
                   onError={(e) => {
