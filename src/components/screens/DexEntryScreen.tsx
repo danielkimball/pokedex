@@ -12,6 +12,7 @@ import { getItemName } from '../../core/constants/items';
 import { getPokemonBySpecies } from '../../db/pokemon-store';
 import type { PokemonRecord } from '../../db/schema';
 import { TypeBadge } from '../ui/TypeBadge';
+import { TcgCard } from '../ui/TcgCard';
 import { getGender } from '../../core/utils/gender';
 import { ORIGIN_GAMES } from '../../core/constants/origin-games';
 import { spriteUrl, defaultSpriteUrl, monSpriteUrl, gen1CardArt, gameLabel, genLabel } from '../../core/constants/games';
@@ -370,6 +371,10 @@ export function DexEntryScreen() {
                   const cardBg = CARD_BG[primaryType] || '#D4D0AC';
 
                   const renderCard = (record: PokemonRecord) => {
+                    // Gen 1 Electric: render the Base Set TCG card (template + illustration + game data).
+                    if (record.generation === 1 && getTypesForSpecies(record.species).includes('Electric')) {
+                      return <TcgCard record={record} />;
+                    }
                     const ne = NATURE_EFFECTS[record.nature];
                     const nl = NATURES[record.nature] || '???';
                     const natureLabel = ne?.increased ? `${nl} (+${ne.increased} -${ne.decreased})` : nl;
