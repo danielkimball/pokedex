@@ -142,7 +142,9 @@ const S = {
     maxWidth: '330px',
     aspectRatio: '800 / 1106',
     margin: '0 auto',
-    containerType: 'size' as const,
+    // inline-size (not size): powers cqw scaling while letting aspect-ratio set
+    // the height. `size` applies block-axis containment and collapses the card.
+    containerType: 'inline-size' as const,
     fontFamily: FONT,
     userSelect: 'none' as const,
     borderRadius: 'clamp(10px, 4.5vw, 20px)',
