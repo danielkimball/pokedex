@@ -18,14 +18,20 @@ import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { MOVES } from '../../core/constants/moves';
 import { MOVE_PP, MOVE_TYPE } from '../../core/constants/moves-data';
 import { EVOLUTIONS } from '../../core/constants/evolutions';
-import { GEN1_CARD_ARTIST } from '../../core/constants/gen1-card-artist';
 import { gen1CardArt, defaultSpriteUrl, monSpriteUrl } from '../../core/constants/games';
-import { tcgEnergyUrl } from '../../core/constants/energies';
+import { TYPE_TO_TCG_ENERGY, tcgEnergyUrl } from '../../core/constants/energies';
 
-const TEMPLATE = '/cards/gen1/templates/electric.jpg';
 const WIN = { left: 10.7, top: 12.3, width: 78.5, height: 40.1 };
 
 const energy = tcgEnergyUrl;
+
+/** Per-type Base Set frame: route the Pokemon's primary type to its TCG energy template. */
+function templateFor(species: number): string {
+  const pair = SPECIES_TYPES[species];
+  const type = pair && pair[0] >= 0 ? TYPES[pair[0]] : 'Normal';
+  const tcg = TYPE_TO_TCG_ENERGY[type] ?? 'colorless';
+  return `/cards/gen1/templates/${tcg}.png`;
+}
 
 const WEAKNESS: Record<string, string> = { Electric: 'Ground' };
 const GEN_MAX_DEX: Record<number, number> = { 1: 151, 2: 251, 3: 386, 4: 493 };
@@ -71,11 +77,10 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
     ['HP', record.ivs.hp], ['ATK', record.ivs.atk], ['DEF', record.ivs.def],
     ['SPD', record.ivs.spe], ['SPC', record.ivs.spa],
   ];
-  const artist = GEN1_CARD_ARTIST[record.species];
 
   return (
     <div style={S.card}>
-      <img src={TEMPLATE} alt="" style={S.template} aria-hidden />
+      <img src={templateFor(record.species)} alt="" style={S.template} aria-hidden />
       <img
         src={art}
         alt={speciesName}
@@ -129,12 +134,6 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
           <span key={k} style={S.dvCell}><span style={S.dvStat}>{k}</span><span style={S.dvVal}>{v}</span></span>
         ))}
       </div>
-
-      {/* Illustrator + copyright credit, spanning the width below the gold box */}
-      <div style={S.credit}>
-        <span>{artist ? `Illus. ${artist}` : ''}</span>
-        <span>©1995, 96, 98 Nintendo, Creatures, GAMEFREAK</span>
-      </div>
     </div>
   );
 }
@@ -146,12 +145,16 @@ const INK = '#141414';
 const S = {
   card: {
     position: 'relative' as const, width: '100%', maxWidth: '330px',
-    aspectRatio: '800 / 1106', margin: '0 auto',
+    // Templates are ~720x990 with their own rounded gold border + transparent
+    // corners, so the card itself is a plain rectangle; no border-radius needed.
+    aspectRatio: '720 / 990', margin: '0 auto',
     containerType: 'inline-size' as const, fontFamily: FONT, userSelect: 'none' as const,
-    borderRadius: 'clamp(10px, 4.5vw, 20px)', overflow: 'hidden' as const,
-    boxShadow: '0 5px 16px rgba(0,0,0,0.38)',
   },
-  template: { position: 'absolute' as const, inset: 0, width: '100%', height: '100%', display: 'block' as const },
+  // drop-shadow follows the template's rounded silhouette (vs box-shadow which is rectangular).
+  template: {
+    position: 'absolute' as const, inset: 0, width: '100%', height: '100%', display: 'block' as const,
+    filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.30))',
+  },
   art: { position: 'absolute' as const, objectFit: 'cover' as const, borderRadius: '1px' },
 
   stage: {
@@ -211,11 +214,4 @@ const S = {
   dvCell: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' as const, lineHeight: 1.05 },
   dvStat: { fontSize: '1.9cqw', color: '#6a5a20', textTransform: 'uppercase' as const },
   dvVal: { fontSize: '3.1cqw', fontWeight: 700 as const, color: INK },
-
-  // Credit spans the width BELOW the bottom gold box (box ends ~95.9%, border ~98.2%).
-  credit: {
-    position: 'absolute' as const, top: '96.1%', left: '5%', right: '5%',
-    display: 'flex', justifyContent: 'space-between' as const, alignItems: 'baseline' as const,
-    gap: '2cqw', fontSize: '1.5cqw', color: '#3a2e00', whiteSpace: 'nowrap' as const,
-  },
 } as const;

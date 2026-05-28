@@ -371,8 +371,8 @@ export function DexEntryScreen() {
                   const cardBg = CARD_BG[primaryType] || '#D4D0AC';
 
                   const renderCard = (record: PokemonRecord) => {
-                    // Gen 1 Electric: render the Base Set TCG card (template + illustration + game data).
-                    if (record.generation === 1 && getTypesForSpecies(record.species).includes('Electric')) {
+                    // Gen 1: render the Base Set TCG card; the template is routed by type.
+                    if (record.generation === 1) {
                       return <TcgCard record={record} />;
                     }
                     const ne = NATURE_EFFECTS[record.nature];
