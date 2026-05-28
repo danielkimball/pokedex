@@ -20,7 +20,7 @@ import { EVOLUTIONS } from '../../core/constants/evolutions';
 import { NATURES } from '../../core/constants/natures';
 import { ABILITIES } from '../../core/constants/abilities';
 import { getItemName } from '../../core/constants/items';
-import { gen1CardArt, defaultSpriteUrl, monSpriteUrl } from '../../core/constants/games';
+import { defaultSpriteUrl, monSpriteUrl, monCardArt } from '../../core/constants/games';
 import { TYPE_TO_TCG_ENERGY, tcgEnergyUrl } from '../../core/constants/energies';
 
 /** Art-window coordinates per template (Gen 1 PNGs; each has its own ~1% offsets). */
@@ -34,6 +34,12 @@ const ART_WINDOW: Record<string, { left: number; top: number; width: number; hei
   water:     { left: 10.4, top: 11.9, width: 78.9, height: 39.3 },
 };
 const DEFAULT_WINDOW = { left: 10.7, top: 12.3, width: 78.5, height: 40.2 };
+
+/**
+ * Gen 4 frames (DP/PL/HGSS) use a wider, slightly-lower art window than Gen 1.
+ * Used by the CssTemplate-Gen4 placeholder and by `<img>` art positioning.
+ */
+const GEN4_ART_WINDOW = { left: 7.0, top: 11.5, width: 86.0, height: 37.5 };
 
 const energy = tcgEnergyUrl;
 
@@ -96,8 +102,12 @@ function approxHp(level: number): number {
 }
 
 /** CSS-drawn placeholder template used until real PNG frames are supplied. */
-function CssTemplate({ energyKey }: { energyKey: string }) {
+function CssTemplate({ energyKey, gen }: { energyKey: string; gen: number }) {
   const c = TEMPLATE_COLORS[energyKey] ?? TEMPLATE_COLORS.colorless;
+  // Gen 4 frame: wider art window (matches the diamond/angled frame shape we'll
+  // swap in once Dan generates the real PNG templates), bigger inner gold border.
+  const isGen4 = gen >= 4;
+  const art = isGen4 ? GEN4_ART_WINDOW : { left: 10.7, top: 12.3, width: 78.5, height: 40.2 };
   return (
     <div
       aria-hidden
@@ -111,13 +121,22 @@ function CssTemplate({ energyKey }: { energyKey: string }) {
     >
       {/* art-window inner gold frame */}
       <div style={{
-        position: 'absolute', left: '10.7%', top: '12.3%', width: '78.5%', height: '40.2%',
+        position: 'absolute',
+        left: `${art.left}%`, top: `${art.top}%`,
+        width: `${art.width}%`, height: `${art.height}%`,
         border: '0.55cqw solid #d4a72a', background: '#ffffff', boxSizing: 'border-box',
         boxShadow: '0 0.2cqw 0.5cqw rgba(0,0,0,0.15)',
+        // Gen 4 frames have a subtle parallelogram cut on the right edge;
+        // approximate with a small clip-path that hints at the shape.
+        clipPath: isGen4
+          ? 'polygon(0 0, 96% 0, 100% 12%, 100% 100%, 4% 100%, 0 88%)'
+          : undefined,
       }} />
-      {/* gold subtitle bar */}
+      {/* gold subtitle bar — aligned with SUBTITLE_POS so the OT text sits on it. */}
       <div style={{
-        position: 'absolute', left: '11%', right: '7%', top: '54.5%', height: '4cqw',
+        position: 'absolute', left: '11%', right: '7%',
+        top: '54.5%',
+        height: '4cqw',
         background: 'linear-gradient(180deg, #f0c84a, #b08020 50%, #f0c84a 100%)',
         borderRadius: '0.4cqw', boxShadow: '0 0.2cqw 0.4cqw rgba(0,0,0,0.25)',
       }} />
@@ -153,7 +172,7 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
   const speciesName = SPECIES[record.species] ?? `#${record.species}`;
   const title = record.nickname && record.nickname.toLowerCase() !== speciesName.toLowerCase()
     ? record.nickname : speciesName;
-  const art = gen1CardArt(record.species, gen) ?? monSpriteUrl(record);
+  const art = monCardArt(record) ?? monSpriteUrl(record);
   const moves = record.moves.filter(Boolean).map(id => ({
     name: MOVES[id] ?? `Move ${id}`,
     pp: MOVE_PP[id],
@@ -186,14 +205,16 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
   // Attacks shift down when an Ability box is present (Gen 3+).
   const attacksTop = showAbility ? '67%' : '60.5%';
 
-  const win = (usePng ? (ART_WINDOW[energyKey] ?? DEFAULT_WINDOW) : DEFAULT_WINDOW);
+  const win = usePng
+    ? (ART_WINDOW[energyKey] ?? DEFAULT_WINDOW)
+    : (gen >= 4 ? GEN4_ART_WINDOW : DEFAULT_WINDOW);
 
   return (
     <div style={S.card}>
       {usePng ? (
         <img src={`/cards/${dir}/templates/${energyKey}.png`} alt="" style={S.template} aria-hidden />
       ) : (
-        <CssTemplate energyKey={energyKey} />
+        <CssTemplate energyKey={energyKey} gen={gen} />
       )}
 
       <img

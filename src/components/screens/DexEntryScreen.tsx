@@ -15,7 +15,7 @@ import { TypeBadge } from '../ui/TypeBadge';
 import { TcgCard } from '../ui/TcgCard';
 import { getGender } from '../../core/utils/gender';
 import { ORIGIN_GAMES } from '../../core/constants/origin-games';
-import { spriteUrl, defaultSpriteUrl, monSpriteUrl, gen1CardArt, gameLabel, genLabel } from '../../core/constants/games';
+import { spriteUrl, defaultSpriteUrl, monSpriteUrl, monCardArt, gameLabel, genLabel } from '../../core/constants/games';
 import type { PokedexShellContext } from '../layout/PokedexShell';
 
 // Species-level sprite (generation-neutral) for the dex identity + evolution chain.
@@ -388,7 +388,7 @@ export function DexEntryScreen() {
                       : `Box ${record.containerIndex + 1}, slot ${record.slotIndex + 1}`;
                     const gender = getGender(record.species, record.pid);
                     const originGame = record.originGame != null ? ORIGIN_GAMES[record.originGame] : null;
-                    const tcgArt = gen1CardArt(record.species, record.generation);
+                    const tcgArt = monCardArt(record);
 
                     return (
                       <div style={{ ...st.cardOuter, background: cardBg }}>
