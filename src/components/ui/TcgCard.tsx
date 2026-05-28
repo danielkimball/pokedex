@@ -136,9 +136,10 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
         ))}
       </div>
 
-      {/* Illustrator + copyright credit */}
+      {/* Illustrator + copyright credit, spanning the width below the gold box */}
       <div style={S.credit}>
-        {artist ? `Illus. ${artist}   ` : ''}©1995, 96, 98 Nintendo, Creatures, GAMEFREAK
+        <span>{artist ? `Illus. ${artist}` : ''}</span>
+        <span>©1995, 96, 98 Nintendo, Creatures, GAMEFREAK</span>
       </div>
     </div>
   );
@@ -165,7 +166,7 @@ const S = {
     textShadow: '0 1px 0 rgba(255,255,255,0.4)',
   },
   name: {
-    position: 'absolute' as const, top: '5.7%', left: '12.5%', right: '31%',
+    position: 'absolute' as const, top: '5.7%', left: '12.5%', right: '27%',
     fontSize: '5.4cqw', fontWeight: 700 as const, color: INK, lineHeight: 1,
     textShadow: '0 1px 0 rgba(255,255,255,0.45)',
     whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const,
@@ -178,9 +179,9 @@ const S = {
     display: 'flex', alignItems: 'baseline' as const, gap: '0.6cqw',
     textShadow: '0 1px 0 rgba(255,255,255,0.45)',
   },
-  hpNum: { fontSize: '7.2cqw', fontWeight: 700 as const, color: RED, lineHeight: 1 },
-  hpLbl: { fontSize: '6cqw', fontWeight: 700 as const, color: RED },
-  hpEnergy: { width: '6.6cqw', height: '6.6cqw', objectFit: 'contain' as const, alignSelf: 'center' as const, marginLeft: '0.6cqw' },
+  hpNum: { fontSize: '5.4cqw', fontWeight: 700 as const, color: RED, lineHeight: 1 },
+  hpLbl: { fontSize: '4.8cqw', fontWeight: 700 as const, color: RED },
+  hpEnergy: { width: '5cqw', height: '5cqw', objectFit: 'contain' as const, alignSelf: 'center' as const, marginLeft: '0.6cqw' },
 
   subtitle: {
     position: 'absolute' as const, top: '54.9%', left: '17%', right: '7%',
@@ -217,10 +218,10 @@ const S = {
   dvStat: { fontSize: '1.9cqw', color: '#6a5a20', textTransform: 'uppercase' as const },
   dvVal: { fontSize: '3.1cqw', fontWeight: 700 as const, color: INK },
 
-  // Credit sits BELOW the bottom gold box (box ends ~95.9%, border starts ~98.2%).
+  // Credit spans the width BELOW the bottom gold box (box ends ~95.9%, border ~98.2%).
   credit: {
-    position: 'absolute' as const, top: '96.4%', left: '5%', right: '5%',
-    textAlign: 'center' as const, fontSize: '1.5cqw', color: '#3a2e00',
-    whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const,
+    position: 'absolute' as const, top: '96.1%', left: '5%', right: '5%',
+    display: 'flex', justifyContent: 'space-between' as const, alignItems: 'baseline' as const,
+    gap: '2cqw', fontSize: '1.5cqw', color: '#3a2e00', whiteSpace: 'nowrap' as const,
   },
 } as const;
