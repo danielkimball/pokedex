@@ -25,15 +25,54 @@ const WIN = { left: 10.7, top: 12.3, width: 78.5, height: 40.1 };
 
 const energy = tcgEnergyUrl;
 
-/** Per-type Base Set frame: route the Pokemon's primary type to its TCG energy template. */
-function templateFor(species: number): string {
+/**
+ * Per-template subtitle position (the gold bar text). Each generated template
+ * has the bar at a slightly different y, and stamps of varying width — these
+ * are measured from each PNG so the OT/Game/dex line sits centered on the bar.
+ */
+const SUBTITLE_POS: Record<string, { top: string; left: string; right: string }> = {
+  lightning:  { top: '55.2%', left: '13%', right: '7%' },
+  fighting:   { top: '56.4%', left: '13%', right: '7%' },
+  fire:       { top: '55.5%', left: '13%', right: '7%' },
+  grass:      { top: '56.5%', left: '13%', right: '7%' },
+  colorless:  { top: '54.9%', left: '13%', right: '7%' },
+  psychic:    { top: '56.3%', left: '14%', right: '6%' },
+  water:      { top: '54.4%', left: '13%', right: '7%' },
+};
+
+function getTcgEnergy(species: number): string {
   const pair = SPECIES_TYPES[species];
   const type = pair && pair[0] >= 0 ? TYPES[pair[0]] : 'Normal';
-  const tcg = TYPE_TO_TCG_ENERGY[type] ?? 'colorless';
-  return `/cards/gen1/templates/${tcg}.png`;
+  return TYPE_TO_TCG_ENERGY[type] ?? 'colorless';
 }
 
-const WEAKNESS: Record<string, string> = { Electric: 'Ground' };
+/** Per-type Base Set frame: route the Pokemon's primary type to its TCG energy template. */
+function templateFor(species: number): string {
+  return `/cards/gen1/templates/${getTcgEnergy(species)}.png`;
+}
+
+/**
+ * Primary in-game type weakness (Gen 1). Many types have multiple weaknesses;
+ * we pick the canonical one. The icon is then folded through the TCG energy
+ * map (Bug -> Grass icon, Ground -> Fighting icon, etc.).
+ */
+const WEAKNESS: Record<string, string> = {
+  Normal: 'Fighting',
+  Fire: 'Water',
+  Water: 'Electric',
+  Electric: 'Ground',
+  Grass: 'Fire',
+  Ice: 'Fire',
+  Fighting: 'Psychic',
+  Poison: 'Psychic',
+  Ground: 'Water',
+  Flying: 'Electric',
+  Psychic: 'Bug',
+  Bug: 'Fire',
+  Rock: 'Water',
+  Ghost: 'Psychic',
+  Dragon: 'Ice',
+};
 const GEN_MAX_DEX: Record<number, number> = { 1: 151, 2: 251, 3: 386, 4: 493 };
 
 function primaryType(species: number): string {
@@ -73,6 +112,7 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
   const location = record.location === 'party'
     ? 'In Party'
     : `Box ${record.containerIndex + 1}, Slot ${record.slotIndex + 1}`;
+  const energyKey = getTcgEnergy(record.species);
   const dvs: [string, number][] = [
     ['HP', record.ivs.hp], ['ATK', record.ivs.atk], ['DEF', record.ivs.def],
     ['SPD', record.ivs.spe], ['SPC', record.ivs.spa],
@@ -101,8 +141,10 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
         <img src={energy(type)} alt="" style={S.hpEnergy} />
       </div>
 
-      {/* Gold bar: OT / game / dex number */}
-      <div style={S.subtitle}>OT: {record.otName || 'Unknown'} {'·'} Game: {game} {'·'} {dex3}/151</div>
+      {/* Gold bar: OT / game / dex number (position is per-template) */}
+      <div style={{ ...S.subtitle, ...(SUBTITLE_POS[energyKey] ?? SUBTITLE_POS.lightning) }}>
+        OT: {record.otName || 'Unknown'} {'·'} Game: {game} {'·'} {dex3}/151
+      </div>
 
       {/* Attacks: real moves with their energy + PP */}
       <div style={S.attacks}>
