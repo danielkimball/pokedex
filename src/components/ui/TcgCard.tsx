@@ -36,10 +36,12 @@ const ART_WINDOW: Record<string, { left: number; top: number; width: number; hei
 const DEFAULT_WINDOW = { left: 10.7, top: 12.3, width: 78.5, height: 40.2 };
 
 /**
- * Gen 4 frames (DP/PL/HGSS) use a wider, slightly-lower art window than Gen 1.
- * Used by the CssTemplate-Gen4 placeholder and by `<img>` art positioning.
+ * Gen 4 art window: smaller box (with frame breathing room around it) so the
+ * full v5 crop — which includes the BASIC/Stage tab corner and the entire
+ * subject — fits via objectFit:'contain' without any further cropping.
+ * Aspect ~1.58 roughly matches the source-crop aspect (~1.57-1.61).
  */
-const GEN4_ART_WINDOW = { left: 7.0, top: 11.5, width: 86.0, height: 37.5 };
+const GEN4_ART_WINDOW = { left: 11.0, top: 13.5, width: 78.0, height: 36.0 };
 
 const energy = tcgEnergyUrl;
 
@@ -126,12 +128,21 @@ function CssTemplate({ energyKey, gen }: { energyKey: string; gen: number }) {
         width: `${art.width}%`, height: `${art.height}%`,
         border: '0.55cqw solid #d4a72a', background: '#ffffff', boxSizing: 'border-box',
         boxShadow: '0 0.2cqw 0.5cqw rgba(0,0,0,0.15)',
-        // Gen 4 frames have a subtle parallelogram cut on the right edge;
-        // approximate with a small clip-path that hints at the shape.
-        clipPath: isGen4
-          ? 'polygon(0 0, 96% 0, 100% 12%, 100% 100%, 4% 100%, 0 88%)'
-          : undefined,
+        borderRadius: isGen4 ? '1.2cqw' : '0',
       }} />
+      {/* Gen 4 only: a faint rounded shadow under the art window so its
+          rounded corners + cropped BASIC tab read as one coherent framed
+          card-window rather than a floating image. */}
+      {isGen4 && (
+        <div style={{
+          position: 'absolute',
+          left: `${art.left - 0.6}%`, top: `${art.top - 0.4}%`,
+          width: `${art.width + 1.2}%`, height: `${art.height + 0.8}%`,
+          borderRadius: '1.4cqw',
+          boxShadow: '0 0 0 0.25cqw rgba(106, 74, 16, 0.35), 0 0.5cqw 1cqw rgba(0,0,0,0.25)',
+          pointerEvents: 'none', zIndex: 0,
+        }} />
+      )}
       {/* gold subtitle bar — aligned with SUBTITLE_POS so the OT text sits on it. */}
       <div style={{
         position: 'absolute', left: '8%', right: '8%',
@@ -228,11 +239,15 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
         alt={speciesName}
         // Gen 4 uses `contain` so wider crops never lose ears/tails to overflow;
         // Gen 1 stays on `cover` so its painted scene fills its tighter frame.
+        // The matching borderRadius on the wrapper completes the BASIC tab's
+        // rounded corner that's only partly captured in the cropped image.
         style={{
           ...S.art,
           left: `${win.left}%`, top: `${win.top}%`,
           width: `${win.width}%`, height: `${win.height}%`,
           objectFit: gen >= 4 ? 'contain' : 'cover',
+          borderRadius: gen >= 4 ? '1cqw' : '1px',
+          background: gen >= 4 ? '#ffffff' : undefined,
         }}
         onError={(e) => { e.currentTarget.src = defaultSpriteUrl(record.species); }}
       />
