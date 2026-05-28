@@ -74,8 +74,7 @@ describe('gen4CardArt resolver', () => {
 });
 
 describe('monCardArt dispatch', () => {
-  it('returns null for Gen 2 + Gen 3 records (no art on disk yet)', () => {
-    expect(monCardArt({ species: 25, game: 'Silver', generation: 2 })).toBeNull();
+  it('returns null for Gen 3 records (Gen 2 covered by gen2-card-art.test.ts)', () => {
     expect(monCardArt({ species: 252, game: 'Ruby', generation: 3 })).toBeNull();
   });
 

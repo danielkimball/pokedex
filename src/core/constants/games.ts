@@ -67,6 +67,7 @@ export function defaultSpriteUrl(dex: number): string {
 }
 
 import { GEN1_CARD_ART } from './gen1-card-art';
+import { gen2CardArt } from './gen2-card-art';
 import { gen4CardArt } from './gen4-card-art';
 
 /**
@@ -87,8 +88,9 @@ export function gen1CardArt(species: number, generation?: number | null): string
 export function monCardArt(rec: { species: number; game?: string | null; generation?: number | null }): string | null {
   const gen = rec.generation ?? 0;
   if (gen === 1) return GEN1_CARD_ART[rec.species] ?? null;
+  if (gen === 2) return gen2CardArt(rec.species);
   if (gen === 4) return gen4CardArt(rec.species, rec.game ?? null);
-  return null; // Gen 2/3 art not yet on disk
+  return null; // Gen 3 art not yet on disk
 }
 
 const SURF_MOVE_ID = 57;

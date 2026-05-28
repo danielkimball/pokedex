@@ -43,6 +43,13 @@ const DEFAULT_WINDOW = { left: 10.7, top: 12.3, width: 78.5, height: 40.2 };
  */
 const GEN4_ART_WINDOW = { left: 11.0, top: 13.5, width: 78.0, height: 36.0 };
 
+/**
+ * Gen 2 art window: shorter than Gen 4. Neo/e-Card cards have a tall species-
+ * name header above the art, so we crop higher and end up with a more
+ * landscape-oriented crop (~2.0:1 aspect). Box aspect ~2.0 matches.
+ */
+const GEN2_ART_WINDOW = { left: 11.0, top: 16.0, width: 78.0, height: 28.0 };
+
 const energy = tcgEnergyUrl;
 
 const SUBTITLE_POS: Record<string, { top: string; left: string; right: string }> = {
@@ -106,10 +113,14 @@ function approxHp(level: number): number {
 /** CSS-drawn placeholder template used until real PNG frames are supplied. */
 function CssTemplate({ energyKey, gen }: { energyKey: string; gen: number }) {
   const c = TEMPLATE_COLORS[energyKey] ?? TEMPLATE_COLORS.colorless;
-  // Gen 4 frame: wider art window (matches the diamond/angled frame shape we'll
-  // swap in once Dan generates the real PNG templates), bigger inner gold border.
+  // Modern (Gen 2+) frames: rounded art window, gold ring, drop the 1st-Ed dot.
+  // Each modern gen has its own art-window aspect to match its source crop.
+  const isModern = gen >= 2;
   const isGen4 = gen >= 4;
-  const art = isGen4 ? GEN4_ART_WINDOW : { left: 10.7, top: 12.3, width: 78.5, height: 40.2 };
+  const art =
+    gen >= 4 ? GEN4_ART_WINDOW :
+    gen === 2 ? GEN2_ART_WINDOW :
+    { left: 10.7, top: 12.3, width: 78.5, height: 40.2 };
   return (
     <div
       aria-hidden
@@ -128,12 +139,12 @@ function CssTemplate({ energyKey, gen }: { energyKey: string; gen: number }) {
         width: `${art.width}%`, height: `${art.height}%`,
         border: '0.55cqw solid #d4a72a', background: '#ffffff', boxSizing: 'border-box',
         boxShadow: '0 0.2cqw 0.5cqw rgba(0,0,0,0.15)',
-        borderRadius: isGen4 ? '1.2cqw' : '0',
+        borderRadius: isModern ? '1.2cqw' : '0',
       }} />
-      {/* Gen 4 only: a faint rounded shadow under the art window so its
-          rounded corners + cropped BASIC tab read as one coherent framed
-          card-window rather than a floating image. */}
-      {isGen4 && (
+      {/* Modern gens (2 + 4): faint gold-shadow ring around the art window so
+          the rounded crop reads as a deliberately framed card-window rather
+          than a floating image. */}
+      {isModern && (
         <div style={{
           position: 'absolute',
           left: `${art.left - 0.6}%`, top: `${art.top - 0.4}%`,
@@ -152,15 +163,16 @@ function CssTemplate({ energyKey, gen }: { energyKey: string; gen: number }) {
         borderRadius: '0.4cqw', boxShadow: '0 0.2cqw 0.4cqw rgba(0,0,0,0.25)',
       }} />
       {/* Gen 1 only: 1st-Edition-style black stamp at the left of the subtitle bar.
-          Gen 4 cards never had this — omit for non-Gen-1 to avoid the "black hole". */}
-      {!isGen4 && (
+          Later gens never had this — omit to avoid the "black hole" Dan flagged. */}
+      {!isModern && (
         <div style={{
           position: 'absolute', left: '4.5%', top: '53.5%', width: '6cqw', height: '6cqw',
           background: '#1a1a1a', borderRadius: '50%',
           border: '0.3cqw solid #b08020',
         }} />
       )}
-      {/* bottom stat-box outline — sized + positioned to hug the IV/EV rows. */}
+      {/* bottom stat-box outline — sized + positioned to hug the IV/EV rows.
+          Gen 4 shows IV + EV (two rows), Gen 1/2 shows one DV row higher up. */}
       <div style={{
         position: 'absolute', left: '7%', right: '7%',
         top: isGen4 ? '90.5%' : '88.5%',
@@ -224,7 +236,9 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
 
   const win = usePng
     ? (ART_WINDOW[energyKey] ?? DEFAULT_WINDOW)
-    : (gen >= 4 ? GEN4_ART_WINDOW : DEFAULT_WINDOW);
+    : gen >= 4 ? GEN4_ART_WINDOW
+    : gen === 2 ? GEN2_ART_WINDOW
+    : DEFAULT_WINDOW;
 
   return (
     <div style={S.card}>
@@ -237,17 +251,17 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
       <img
         src={art}
         alt={speciesName}
-        // Gen 4 uses `contain` so wider crops never lose ears/tails to overflow;
-        // Gen 1 stays on `cover` so its painted scene fills its tighter frame.
-        // The matching borderRadius on the wrapper completes the BASIC tab's
-        // rounded corner that's only partly captured in the cropped image.
+        // Modern gens (2 + 4) use `contain` so the wider crops never lose
+        // ears/tails to overflow; Gen 1 stays on `cover` so its painted scene
+        // fills its tighter frame. Matching borderRadius on the wrapper
+        // completes the cropped image's rounded corner.
         style={{
           ...S.art,
           left: `${win.left}%`, top: `${win.top}%`,
           width: `${win.width}%`, height: `${win.height}%`,
-          objectFit: gen >= 4 ? 'contain' : 'cover',
-          borderRadius: gen >= 4 ? '1cqw' : '1px',
-          background: gen >= 4 ? '#ffffff' : undefined,
+          objectFit: gen >= 2 ? 'contain' : 'cover',
+          borderRadius: gen >= 2 ? '1cqw' : '1px',
+          background: gen >= 2 ? '#ffffff' : undefined,
         }}
         onError={(e) => { e.currentTarget.src = defaultSpriteUrl(record.species); }}
       />
