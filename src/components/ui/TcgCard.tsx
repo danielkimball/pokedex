@@ -139,7 +139,9 @@ function CssTemplate({ energyKey }: { energyKey: string }) {
 
 export function TcgCard({ record }: { record: PokemonRecord }) {
   const gen = record.generation ?? 1;
-  const showAbility = gen >= 3 && record.ability != null && record.ability > 0;
+  // Gen 4 stores the real ability id; Gen 3 stores only the slot index (needs a
+  // species->abilities table to resolve). Gate to gen 4+ until that table lands.
+  const showAbility = gen >= 4 && record.ability != null && record.ability > 0;
   const showHeldItem = gen >= 2 && record.heldItem > 0;
   const showEVs = gen >= 3;
   const showNature = gen >= 3;
