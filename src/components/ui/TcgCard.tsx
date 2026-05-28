@@ -165,7 +165,7 @@ const S = {
     textShadow: '0 1px 0 rgba(255,255,255,0.4)',
   },
   name: {
-    position: 'absolute' as const, top: '5.7%', left: '12.5%', right: '27%',
+    position: 'absolute' as const, top: '5.7%', left: '12.5%', right: '31%',
     fontSize: '5.4cqw', fontWeight: 700 as const, color: INK, lineHeight: 1,
     textShadow: '0 1px 0 rgba(255,255,255,0.45)',
     whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const,
@@ -178,9 +178,9 @@ const S = {
     display: 'flex', alignItems: 'baseline' as const, gap: '0.6cqw',
     textShadow: '0 1px 0 rgba(255,255,255,0.45)',
   },
-  hpNum: { fontSize: '6cqw', fontWeight: 700 as const, color: RED, lineHeight: 1 },
-  hpLbl: { fontSize: '3.2cqw', fontWeight: 700 as const, color: RED },
-  hpEnergy: { width: '5.4cqw', height: '5.4cqw', objectFit: 'contain' as const, alignSelf: 'center' as const, marginLeft: '0.4cqw' },
+  hpNum: { fontSize: '7.2cqw', fontWeight: 700 as const, color: RED, lineHeight: 1 },
+  hpLbl: { fontSize: '6cqw', fontWeight: 700 as const, color: RED },
+  hpEnergy: { width: '6.6cqw', height: '6.6cqw', objectFit: 'contain' as const, alignSelf: 'center' as const, marginLeft: '0.6cqw' },
 
   subtitle: {
     position: 'absolute' as const, top: '54.9%', left: '17%', right: '7%',
@@ -209,17 +209,18 @@ const S = {
   infoVal: { fontSize: '2.6cqw', fontWeight: 700 as const, color: INK },
 
   dvBox: {
-    position: 'absolute' as const, top: '90.8%', left: 0, right: 0,
-    display: 'flex', alignItems: 'center' as const, justifyContent: 'center' as const, gap: '3cqw',
+    position: 'absolute' as const, top: '91.5%', left: '10%', right: '10%',
+    display: 'flex', alignItems: 'center' as const, justifyContent: 'space-between' as const,
   },
-  dvLabel: { fontSize: '1.9cqw', fontWeight: 700 as const, color: '#5a4a10', letterSpacing: '0.5px' },
-  dvCell: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' as const, lineHeight: 1 },
-  dvStat: { fontSize: '1.5cqw', color: '#6a5a20', textTransform: 'uppercase' as const },
-  dvVal: { fontSize: '2.5cqw', fontWeight: 700 as const, color: INK },
+  dvLabel: { fontSize: '2.2cqw', fontWeight: 700 as const, color: '#5a4a10', letterSpacing: '0.5px' },
+  dvCell: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' as const, lineHeight: 1.05 },
+  dvStat: { fontSize: '1.9cqw', color: '#6a5a20', textTransform: 'uppercase' as const },
+  dvVal: { fontSize: '3.1cqw', fontWeight: 700 as const, color: INK },
 
+  // Credit sits BELOW the bottom gold box (box ends ~95.9%, border starts ~98.2%).
   credit: {
-    position: 'absolute' as const, top: '94.3%', left: '6%', right: '6%',
-    textAlign: 'center' as const, fontSize: '1.55cqw', color: '#3a2e00',
+    position: 'absolute' as const, top: '96.4%', left: '5%', right: '5%',
+    textAlign: 'center' as const, fontSize: '1.5cqw', color: '#3a2e00',
     whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const,
   },
 } as const;
