@@ -21,7 +21,16 @@ import { EVOLUTIONS } from '../../core/constants/evolutions';
 import { gen1CardArt, defaultSpriteUrl, monSpriteUrl } from '../../core/constants/games';
 import { TYPE_TO_TCG_ENERGY, tcgEnergyUrl } from '../../core/constants/energies';
 
-const WIN = { left: 10.7, top: 12.3, width: 78.5, height: 40.1 };
+/** Art-window coordinates per template (each generated template has its own ~1% offsets). */
+const ART_WINDOW: Record<string, { left: number; top: number; width: number; height: number }> = {
+  lightning: { left: 10.7, top: 12.3, width: 78.5, height: 40.2 },
+  fighting:  { left: 11.4, top: 12.9, width: 77.1, height: 40.0 },
+  fire:      { left: 11.1, top: 12.3, width: 77.4, height: 39.7 },
+  grass:     { left: 11.4, top: 12.9, width: 77.1, height: 40.0 },
+  colorless: { left: 11.2, top: 11.9, width: 77.1, height: 39.7 },
+  psychic:   { left: 11.4, top: 13.1, width: 76.4, height: 39.3 },
+  water:     { left: 10.4, top: 11.9, width: 78.9, height: 39.3 },
+};
 
 const energy = tcgEnergyUrl;
 
@@ -121,12 +130,17 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
   return (
     <div style={S.card}>
       <img src={templateFor(record.species)} alt="" style={S.template} aria-hidden />
-      <img
-        src={art}
-        alt={speciesName}
-        style={{ ...S.art, left: `${WIN.left}%`, top: `${WIN.top}%`, width: `${WIN.width}%`, height: `${WIN.height}%` }}
-        onError={(e) => { e.currentTarget.src = defaultSpriteUrl(record.species); }}
-      />
+      {(() => {
+        const w = ART_WINDOW[energyKey] ?? ART_WINDOW.lightning;
+        return (
+          <img
+            src={art}
+            alt={speciesName}
+            style={{ ...S.art, left: `${w.left}%`, top: `${w.top}%`, width: `${w.width}%`, height: `${w.height}%` }}
+            onError={(e) => { e.currentTarget.src = defaultSpriteUrl(record.species); }}
+          />
+        );
+      })()}
 
       {/* Stage + name */}
       <div style={S.stage}>{stageLabel(record.species, record.generation ?? 1)} Pokémon</div>
@@ -229,14 +243,14 @@ const S = {
   },
 
   attacks: {
-    position: 'absolute' as const, top: '60%', left: '11%', right: '11%',
-    display: 'flex', flexDirection: 'column' as const, gap: '1.3cqw',
+    position: 'absolute' as const, top: '60.5%', left: '11%', right: '11%',
+    display: 'flex', flexDirection: 'column' as const, gap: '2cqw',
   },
-  atkRow: { display: 'flex', alignItems: 'center' as const, gap: '2cqw' },
-  atkIcon: { width: '5cqw', height: '5cqw', objectFit: 'contain' as const, flexShrink: 0 },
-  atkName: { flex: 1, fontSize: '3.7cqw', fontWeight: 700 as const, color: INK, textShadow: '0 1px 0 rgba(255,255,255,0.35)' },
-  atkPp: { fontSize: '3.3cqw', fontWeight: 700 as const, color: '#2a2a2a', flexShrink: 0 },
-  atkPpLbl: { fontSize: '2.2cqw', color: '#5a5a5a' },
+  atkRow: { display: 'flex', alignItems: 'center' as const, gap: '2.4cqw' },
+  atkIcon: { width: '5.8cqw', height: '5.8cqw', objectFit: 'contain' as const, flexShrink: 0 },
+  atkName: { flex: 1, fontSize: '4.3cqw', fontWeight: 700 as const, color: INK, textShadow: '0 1px 0 rgba(255,255,255,0.35)' },
+  atkPp: { fontSize: '3.8cqw', fontWeight: 700 as const, color: '#2a2a2a', flexShrink: 0 },
+  atkPpLbl: { fontSize: '2.5cqw', color: '#5a5a5a' },
 
   info: {
     position: 'absolute' as const, top: '83.5%', left: '11%', right: '11%',
@@ -249,11 +263,12 @@ const S = {
   infoVal: { fontSize: '2.6cqw', fontWeight: 700 as const, color: INK },
 
   dvBox: {
-    position: 'absolute' as const, top: '91.5%', left: '10%', right: '10%',
-    display: 'flex', alignItems: 'center' as const, justifyContent: 'space-between' as const,
+    position: 'absolute' as const, top: '91.5%', left: 0, right: 0,
+    display: 'flex', alignItems: 'center' as const, justifyContent: 'center' as const,
+    gap: '4.5cqw',
   },
-  dvLabel: { fontSize: '2.2cqw', fontWeight: 700 as const, color: '#5a4a10', letterSpacing: '0.5px' },
+  dvLabel: { fontSize: '2.3cqw', fontWeight: 700 as const, color: '#5a4a10', letterSpacing: '0.5px' },
   dvCell: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' as const, lineHeight: 1.05 },
-  dvStat: { fontSize: '1.9cqw', color: '#6a5a20', textTransform: 'uppercase' as const },
-  dvVal: { fontSize: '3.1cqw', fontWeight: 700 as const, color: INK },
+  dvStat: { fontSize: '2cqw', color: '#6a5a20', textTransform: 'uppercase' as const },
+  dvVal: { fontSize: '3.2cqw', fontWeight: 700 as const, color: INK },
 } as const;

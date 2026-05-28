@@ -152,4 +152,5 @@ export const GEN1_CARD_ART: Record<number, string> = {
   148: '/cards/gen1/base/18.jpg', // Dragonair
   149: '/cards/gen1/fossil/4.jpg', // Dragonite
   150: '/cards/gen1/base/10.jpg', // Mewtwo
+  151: '/cards/gen1/promo/151.jpg', // Mew (Wizards Black Star Promo)
 };
