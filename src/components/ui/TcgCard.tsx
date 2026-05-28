@@ -1,15 +1,14 @@
 /**
- * Base Set (Gen 1) trading-card renderer.
+ * Multi-gen TCG-style card renderer.
  *
- * Three layers: the user's recolored Base Set template (gold frame, cloud
- * texture, energy symbol + 1st-Edition stamp baked in), the original WotC
- * illustration in the art window, and the Pokemon's real game data on top.
- * Positions are % of the card; fonts use cqw container units so it scales.
+ * Composites a template (real PNG for Gen 1; a CSS-drawn placeholder frame for
+ * Gen 2/3/4 until the user supplies real templates), the era illustration, and
+ * the Pokemon's real game data. Branches on `record.generation`:
+ *   Gen 1   -> DV row only, no ability/held item/nature.
+ *   Gen 2   -> DVs + held item (DVs are still Gen 2's IV equivalent).
+ *   Gen 3+  -> IVs (0-31) + EVs (0-252) + ability box + nature + held item.
  *
- * Styling matches the 1999 Base Set: black Gill Sans name with a small stage
- * label above it, red HP, and an illustrator/copyright credit line. Gen 1 has
- * no natures/EVs/held items, so the bottom shows DVs and the info row shows
- * type weakness + current location (retreat/resistance dropped).
+ * Positions are % of the card; fonts use cqw so the whole card scales together.
  */
 
 import type { PokemonRecord } from '../../db/schema';
@@ -18,10 +17,13 @@ import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { MOVES } from '../../core/constants/moves';
 import { MOVE_PP, MOVE_TYPE } from '../../core/constants/moves-data';
 import { EVOLUTIONS } from '../../core/constants/evolutions';
+import { NATURES } from '../../core/constants/natures';
+import { ABILITIES } from '../../core/constants/abilities';
+import { getItemName } from '../../core/constants/items';
 import { gen1CardArt, defaultSpriteUrl, monSpriteUrl } from '../../core/constants/games';
 import { TYPE_TO_TCG_ENERGY, tcgEnergyUrl } from '../../core/constants/energies';
 
-/** Art-window coordinates per template (each generated template has its own ~1% offsets). */
+/** Art-window coordinates per template (Gen 1 PNGs; each has its own ~1% offsets). */
 const ART_WINDOW: Record<string, { left: number; top: number; width: number; height: number }> = {
   lightning: { left: 10.7, top: 12.3, width: 78.5, height: 40.2 },
   fighting:  { left: 11.4, top: 12.9, width: 77.1, height: 40.0 },
@@ -31,14 +33,10 @@ const ART_WINDOW: Record<string, { left: number; top: number; width: number; hei
   psychic:   { left: 11.4, top: 13.1, width: 76.4, height: 39.3 },
   water:     { left: 10.4, top: 11.9, width: 78.9, height: 39.3 },
 };
+const DEFAULT_WINDOW = { left: 10.7, top: 12.3, width: 78.5, height: 40.2 };
 
 const energy = tcgEnergyUrl;
 
-/**
- * Per-template subtitle position (the gold bar text). Each generated template
- * has the bar at a slightly different y, and stamps of varying width — these
- * are measured from each PNG so the OT/Game/dex line sits centered on the bar.
- */
 const SUBTITLE_POS: Record<string, { top: string; left: string; right: string }> = {
   lightning:  { top: '55.2%', left: '13%', right: '7%' },
   fighting:   { top: '56.4%', left: '13%', right: '7%' },
@@ -49,47 +47,43 @@ const SUBTITLE_POS: Record<string, { top: string; left: string; right: string }>
   water:      { top: '54.4%', left: '13%', right: '7%' },
 };
 
-function getTcgEnergy(species: number): string {
-  const pair = SPECIES_TYPES[species];
-  const type = pair && pair[0] >= 0 ? TYPES[pair[0]] : 'Normal';
-  return TYPE_TO_TCG_ENERGY[type] ?? 'colorless';
-}
-
-/** Per-type Base Set frame: route the Pokemon's primary type to its TCG energy template. */
-function templateFor(species: number): string {
-  return `/cards/gen1/templates/${getTcgEnergy(species)}.png`;
-}
-
-/**
- * Primary in-game type weakness (Gen 1). Many types have multiple weaknesses;
- * we pick the canonical one. The icon is then folded through the TCG energy
- * map (Bug -> Grass icon, Ground -> Fighting icon, etc.).
- */
 const WEAKNESS: Record<string, string> = {
-  Normal: 'Fighting',
-  Fire: 'Water',
-  Water: 'Electric',
-  Electric: 'Ground',
-  Grass: 'Fire',
-  Ice: 'Fire',
-  Fighting: 'Psychic',
-  Poison: 'Psychic',
-  Ground: 'Water',
-  Flying: 'Electric',
-  Psychic: 'Bug',
-  Bug: 'Fire',
-  Rock: 'Water',
-  Ghost: 'Psychic',
-  Dragon: 'Ice',
+  Normal: 'Fighting', Fire: 'Water', Water: 'Electric', Electric: 'Ground',
+  Grass: 'Fire', Ice: 'Fire', Fighting: 'Psychic', Poison: 'Psychic',
+  Ground: 'Water', Flying: 'Electric', Psychic: 'Bug', Bug: 'Fire',
+  Rock: 'Water', Ghost: 'Psychic', Dragon: 'Ice',
 };
+
 const GEN_MAX_DEX: Record<number, number> = { 1: 151, 2: 251, 3: 386, 4: 493 };
+
+/** Which game maps to which template directory (Gen 1 done; later gens are placeholders). */
+const TEMPLATE_DIR: Record<string, string> = {
+  Red: 'gen1', Blue: 'gen1', Yellow: 'gen1',
+  // Gen 2/3/4 — fall through to CssTemplate placeholder until PNGs land.
+};
+
+/** Per-energy palette for the CSS placeholder template. */
+const TEMPLATE_COLORS: Record<string, { light: string; mid: string; dark: string }> = {
+  lightning: { light: '#fff3a8', mid: '#f0cb3a', dark: '#a98000' },
+  fire:      { light: '#ffd0a8', mid: '#e75d36', dark: '#8e2a10' },
+  water:     { light: '#cfe9ff', mid: '#5aa8e8', dark: '#1a4d8a' },
+  grass:     { light: '#dcf2c8', mid: '#76c252', dark: '#2d6a1c' },
+  psychic:   { light: '#ead4f1', mid: '#b97cd2', dark: '#643088' },
+  fighting:  { light: '#efd9b9', mid: '#c79b6e', dark: '#7d4f1f' },
+  colorless: { light: '#f4ecd6', mid: '#d8d3b8', dark: '#8a8268' },
+  darkness:  { light: '#5a4663', mid: '#332537', dark: '#0e0712' },
+  metal:     { light: '#ddddea', mid: '#a8a8b8', dark: '#525260' },
+};
 
 function primaryType(species: number): string {
   const pair = SPECIES_TYPES[species];
   return pair && pair[0] >= 0 ? TYPES[pair[0]] : 'Normal';
 }
 
-/** TCG evolution stage, scoped to the source generation (ignores later-gen babies). */
+function getTcgEnergy(species: number): string {
+  return TYPE_TO_TCG_ENERGY[primaryType(species)] ?? 'colorless';
+}
+
 function stageLabel(species: number, generation: number): string {
   const maxDex = GEN_MAX_DEX[generation] ?? 493;
   const chain = (EVOLUTIONS[species]?.chain ?? [species]).filter(d => d <= maxDex);
@@ -97,56 +91,122 @@ function stageLabel(species: number, generation: number): string {
   return idx <= 0 ? 'Basic' : idx === 1 ? 'Stage 1' : 'Stage 2';
 }
 
-/** Crude HP from level (rounded to 10) until a base-stat table lands. */
 function approxHp(level: number): number {
   return Math.min(120, Math.max(30, Math.round((level * 2 + 12) / 10) * 10));
 }
 
+/** CSS-drawn placeholder template used until real PNG frames are supplied. */
+function CssTemplate({ energyKey }: { energyKey: string }) {
+  const c = TEMPLATE_COLORS[energyKey] ?? TEMPLATE_COLORS.colorless;
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: 'absolute', inset: 0,
+        background: `radial-gradient(ellipse at 30% 22%, ${c.light} 0%, ${c.mid} 55%, ${c.dark} 100%)`,
+        borderRadius: '4cqw',
+        boxShadow: 'inset 0 0 0 1.7cqw #d8b34a, 0 4px 12px rgba(0,0,0,0.32)',
+        overflow: 'hidden',
+      }}
+    >
+      {/* art-window inner gold frame */}
+      <div style={{
+        position: 'absolute', left: '10.7%', top: '12.3%', width: '78.5%', height: '40.2%',
+        border: '0.55cqw solid #d4a72a', background: '#ffffff', boxSizing: 'border-box',
+        boxShadow: '0 0.2cqw 0.5cqw rgba(0,0,0,0.15)',
+      }} />
+      {/* gold subtitle bar */}
+      <div style={{
+        position: 'absolute', left: '11%', right: '7%', top: '54.5%', height: '4cqw',
+        background: 'linear-gradient(180deg, #f0c84a, #b08020 50%, #f0c84a 100%)',
+        borderRadius: '0.4cqw', boxShadow: '0 0.2cqw 0.4cqw rgba(0,0,0,0.25)',
+      }} />
+      {/* 1st-Ed-style left stamp */}
+      <div style={{
+        position: 'absolute', left: '4.5%', top: '53.5%', width: '6cqw', height: '6cqw',
+        background: '#1a1a1a', borderRadius: '50%',
+        border: '0.3cqw solid #b08020',
+      }} />
+      {/* bottom info-box outline */}
+      <div style={{
+        position: 'absolute', left: '8%', right: '8%', top: '88.5%', height: '8.5cqw',
+        border: '0.25cqw solid #b08020', borderRadius: '0.5cqw',
+        background: 'rgba(255,255,255,0.08)',
+      }} />
+    </div>
+  );
+}
+
 export function TcgCard({ record }: { record: PokemonRecord }) {
+  const gen = record.generation ?? 1;
+  const showAbility = gen >= 3 && record.ability != null && record.ability > 0;
+  const showHeldItem = gen >= 2 && record.heldItem > 0;
+  const showEVs = gen >= 3;
+  const showNature = gen >= 3;
+
+  const dir = TEMPLATE_DIR[record.game ?? ''] ?? null;
+  const usePng = dir !== null;
+  const energyKey = getTcgEnergy(record.species);
+
   const speciesName = SPECIES[record.species] ?? `#${record.species}`;
   const title = record.nickname && record.nickname.toLowerCase() !== speciesName.toLowerCase()
-    ? record.nickname
-    : speciesName;
-  const art = gen1CardArt(record.species, record.generation) ?? monSpriteUrl(record);
+    ? record.nickname : speciesName;
+  const art = gen1CardArt(record.species, gen) ?? monSpriteUrl(record);
   const moves = record.moves.filter(Boolean).map(id => ({
     name: MOVES[id] ?? `Move ${id}`,
     pp: MOVE_PP[id],
     type: MOVE_TYPE[id] ?? primaryType(record.species),
   }));
   const hp = approxHp(record.level);
-  const dex3 = String(record.species).padStart(3, '0');
   const type = primaryType(record.species);
   const weakness = WEAKNESS[type];
   const game = record.game ?? 'Yellow';
+  const dexMax = GEN_MAX_DEX[gen] ?? 493;
+  const dex3 = String(record.species).padStart(3, '0');
   const location = record.location === 'party'
     ? 'In Party'
     : `Box ${record.containerIndex + 1}, Slot ${record.slotIndex + 1}`;
-  const energyKey = getTcgEnergy(record.species);
-  const dvs: [string, number][] = [
-    ['HP', record.ivs.hp], ['ATK', record.ivs.atk], ['DEF', record.ivs.def],
-    ['SPD', record.ivs.spe], ['SPC', record.ivs.spa],
+  const natureName = showNature ? (NATURES[record.nature] ?? null) : null;
+  const abilityName = showAbility ? (ABILITIES[record.ability] ?? null) : null;
+  const heldItemName = showHeldItem ? getItemName(record.heldItem) : null;
+
+  // IVs differ Gen 1/2 (DVs, 5 stats merging spa/spd into Spc) vs Gen 3+ (IVs, 6 stats 0-31).
+  const ivCells: [string, number][] = gen >= 3
+    ? [['HP', record.ivs.hp], ['ATK', record.ivs.atk], ['DEF', record.ivs.def],
+       ['SPA', record.ivs.spa], ['SPD', record.ivs.spd], ['SPE', record.ivs.spe]]
+    : [['HP', record.ivs.hp], ['ATK', record.ivs.atk], ['DEF', record.ivs.def],
+       ['SPD', record.ivs.spe], ['SPC', record.ivs.spa]];
+  const evCells: [string, number][] = [
+    ['HP', record.evs.hp], ['ATK', record.evs.atk], ['DEF', record.evs.def],
+    ['SPA', record.evs.spa], ['SPD', record.evs.spd], ['SPE', record.evs.spe],
   ];
+
+  // Attacks shift down when an Ability box is present (Gen 3+).
+  const attacksTop = showAbility ? '67%' : '60.5%';
+
+  const win = (usePng ? (ART_WINDOW[energyKey] ?? DEFAULT_WINDOW) : DEFAULT_WINDOW);
 
   return (
     <div style={S.card}>
-      <img src={templateFor(record.species)} alt="" style={S.template} aria-hidden />
-      {(() => {
-        const w = ART_WINDOW[energyKey] ?? ART_WINDOW.lightning;
-        return (
-          <img
-            src={art}
-            alt={speciesName}
-            style={{ ...S.art, left: `${w.left}%`, top: `${w.top}%`, width: `${w.width}%`, height: `${w.height}%` }}
-            onError={(e) => { e.currentTarget.src = defaultSpriteUrl(record.species); }}
-          />
-        );
-      })()}
+      {usePng ? (
+        <img src={`/cards/${dir}/templates/${energyKey}.png`} alt="" style={S.template} aria-hidden />
+      ) : (
+        <CssTemplate energyKey={energyKey} />
+      )}
 
-      {/* Stage + name */}
-      <div style={S.stage}>{stageLabel(record.species, record.generation ?? 1)} Pokémon</div>
+      <img
+        src={art}
+        alt={speciesName}
+        style={{ ...S.art, left: `${win.left}%`, top: `${win.top}%`, width: `${win.width}%`, height: `${win.height}%` }}
+        onError={(e) => { e.currentTarget.src = defaultSpriteUrl(record.species); }}
+      />
+
+      {/* Stage + name + (nature inline for Gen 3+) */}
+      <div style={S.stage}>{stageLabel(record.species, gen)} Pokémon</div>
       <div style={S.name}>
         {title}{record.isShiny && <span style={S.shiny}> ★</span>}
         <span style={S.lv}> Lv{record.level}</span>
+        {natureName && <span style={S.natureInline}> {'·'} {natureName}</span>}
       </div>
 
       {/* HP (red) + energy */}
@@ -155,13 +215,21 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
         <img src={energy(type)} alt="" style={S.hpEnergy} />
       </div>
 
-      {/* Gold bar: OT / game / dex number (position is per-template) */}
+      {/* Gold bar: OT / game / dex number */}
       <div style={{ ...S.subtitle, ...(SUBTITLE_POS[energyKey] ?? SUBTITLE_POS.lightning) }}>
-        OT: {record.otName || 'Unknown'} {'·'} Game: {game} {'·'} {dex3}/151
+        OT: {record.otName || 'Unknown'} {'·'} Game: {game} {'·'} {dex3}/{dexMax}
       </div>
 
-      {/* Attacks: real moves with their energy + PP */}
-      <div style={S.attacks}>
+      {/* Ability box (Gen 3+, Poké-Body style) */}
+      {showAbility && abilityName && (
+        <div style={S.abilityBox}>
+          <span style={S.abilityLabel}>ABILITY</span>
+          <span style={S.abilityName}>{abilityName}</span>
+        </div>
+      )}
+
+      {/* Attacks */}
+      <div style={{ ...S.attacks, top: attacksTop }}>
         {moves.map((mv, i) => (
           <div key={i} style={S.atkRow}>
             <img src={energy(mv.type)} alt="" style={S.atkIcon} />
@@ -171,25 +239,56 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
         ))}
       </div>
 
-      {/* Info row: type weakness + current location */}
+      {/* Info row: weakness + location (+ held item Gen 2+) */}
       <div style={S.info}>
         <span style={S.infoCell}>
           <span style={S.infoLbl}>weakness</span>
           {weakness ? <img src={energy(weakness)} alt={weakness} style={S.infoIcon} /> : <span style={S.infoDash}>—</span>}
         </span>
-        <span style={{ ...S.infoCell, alignItems: 'flex-end' as const }}>
+        <span style={{ ...S.infoCell, alignItems: 'center' as const }}>
           <span style={S.infoLbl}>location</span>
-          <span style={S.infoVal}>{location}</span>
+          <span style={S.infoValSmall}>{location}</span>
         </span>
+        {showHeldItem ? (
+          <span style={{ ...S.infoCell, alignItems: 'flex-end' as const }}>
+            <span style={S.infoLbl}>held item</span>
+            <span style={S.infoValSmall}>{heldItemName}</span>
+          </span>
+        ) : (
+          <span style={S.infoCell} />
+        )}
       </div>
 
-      {/* DVs (Gen 1 IV equivalent), centered */}
-      <div style={S.dvBox}>
-        <span style={S.dvLabel}>DV</span>
-        {dvs.map(([k, v]) => (
-          <span key={k} style={S.dvCell}><span style={S.dvStat}>{k}</span><span style={S.dvVal}>{v}</span></span>
-        ))}
-      </div>
+      {/* Bottom box: Gen 3+ = IV row + EV row; Gen 1/2 = DV row */}
+      {showEVs ? (
+        <div style={S.statBoxGen4}>
+          <div style={S.statRow}>
+            <span style={S.statRowLabel}>IV</span>
+            {ivCells.map(([k, v]) => (
+              <span key={k} style={S.statCell}>
+                <span style={S.statKey}>{k}</span>
+                <span style={S.statVal}>{v}</span>
+              </span>
+            ))}
+          </div>
+          <div style={S.statRow}>
+            <span style={S.statRowLabel}>EV</span>
+            {evCells.map(([k, v]) => (
+              <span key={k} style={S.statCell}>
+                <span style={S.statKey}>{k}</span>
+                <span style={S.statVal}>{v}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div style={S.dvBox}>
+          <span style={S.dvLabel}>DV</span>
+          {ivCells.map(([k, v]) => (
+            <span key={k} style={S.dvCell}><span style={S.dvStat}>{k}</span><span style={S.dvVal}>{v}</span></span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -201,12 +300,9 @@ const INK = '#141414';
 const S = {
   card: {
     position: 'relative' as const, width: '100%', maxWidth: '330px',
-    // Templates are ~720x990 with their own rounded gold border + transparent
-    // corners, so the card itself is a plain rectangle; no border-radius needed.
     aspectRatio: '720 / 990', margin: '0 auto',
     containerType: 'inline-size' as const, fontFamily: FONT, userSelect: 'none' as const,
   },
-  // drop-shadow follows the template's rounded silhouette (vs box-shadow which is rectangular).
   template: {
     position: 'absolute' as const, inset: 0, width: '100%', height: '100%', display: 'block' as const,
     filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.30))',
@@ -226,6 +322,7 @@ const S = {
   },
   shiny: { color: '#b8860b', fontSize: '4cqw' },
   lv: { fontSize: '3cqw', fontWeight: 700 as const, color: '#3a3a3a' },
+  natureInline: { fontSize: '2.6cqw', fontWeight: 600 as const, color: '#4a3a00' },
 
   hp: {
     position: 'absolute' as const, top: '5%', right: '11%',
@@ -237,13 +334,29 @@ const S = {
   hpEnergy: { width: '5cqw', height: '5cqw', objectFit: 'contain' as const, alignSelf: 'center' as const, marginLeft: '0.6cqw' },
 
   subtitle: {
-    position: 'absolute' as const, top: '54.9%', left: '17%', right: '7%',
+    position: 'absolute' as const,
     textAlign: 'center' as const, fontSize: '2.3cqw', fontWeight: 700 as const,
     color: '#2c2200', whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const,
   },
 
+  // Ability box (Gen 3+) — sits between subtitle and attacks like a Poké-Body.
+  abilityBox: {
+    position: 'absolute' as const, top: '60%', left: '11%', right: '11%',
+    display: 'flex', alignItems: 'center' as const, gap: '1.5cqw',
+    padding: '0.7cqw 1.4cqw',
+    background: 'linear-gradient(180deg, rgba(255,255,255,0.65), rgba(255,255,255,0.32))',
+    border: '0.25cqw solid #b08020',
+    borderRadius: '0.6cqw',
+    boxShadow: 'inset 0 0.2cqw 0.3cqw rgba(255,255,255,0.6)',
+  },
+  abilityLabel: {
+    fontSize: '2cqw', fontWeight: 700 as const, letterSpacing: '0.5px',
+    color: '#8a3a00', textTransform: 'uppercase' as const, flexShrink: 0,
+  },
+  abilityName: { fontSize: '3.4cqw', fontWeight: 700 as const, color: INK },
+
   attacks: {
-    position: 'absolute' as const, top: '60.5%', left: '11%', right: '11%',
+    position: 'absolute' as const, left: '11%', right: '11%',
     display: 'flex', flexDirection: 'column' as const, gap: '2cqw',
   },
   atkRow: { display: 'flex', alignItems: 'center' as const, gap: '2.4cqw' },
@@ -254,21 +367,38 @@ const S = {
 
   info: {
     position: 'absolute' as const, top: '83.5%', left: '11%', right: '11%',
-    display: 'flex', justifyContent: 'space-between' as const, alignItems: 'flex-start' as const,
+    display: 'flex', justifyContent: 'space-between' as const, alignItems: 'flex-start' as const, gap: '1cqw',
   },
-  infoCell: { display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-start' as const, gap: '0.5cqw' },
+  infoCell: { display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-start' as const, gap: '0.5cqw', minWidth: 0 },
   infoLbl: { fontSize: '1.8cqw', textTransform: 'uppercase' as const, letterSpacing: '0.5px', color: '#5a4a10' },
   infoIcon: { width: '3.6cqw', height: '3.6cqw', objectFit: 'contain' as const },
   infoDash: { fontSize: '3cqw', color: '#5a4a10', lineHeight: 1 },
   infoVal: { fontSize: '2.6cqw', fontWeight: 700 as const, color: INK },
+  infoValSmall: { fontSize: '2.3cqw', fontWeight: 700 as const, color: INK, whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const },
 
+  // Gen 1/2 single DV row
   dvBox: {
     position: 'absolute' as const, top: '91.5%', left: 0, right: 0,
-    display: 'flex', alignItems: 'center' as const, justifyContent: 'center' as const,
-    gap: '4.5cqw',
+    display: 'flex', alignItems: 'center' as const, justifyContent: 'center' as const, gap: '4.5cqw',
   },
   dvLabel: { fontSize: '2.3cqw', fontWeight: 700 as const, color: '#5a4a10', letterSpacing: '0.5px' },
   dvCell: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' as const, lineHeight: 1.05 },
   dvStat: { fontSize: '2cqw', color: '#6a5a20', textTransform: 'uppercase' as const },
   dvVal: { fontSize: '3.2cqw', fontWeight: 700 as const, color: INK },
+
+  // Gen 3+ two-row IV/EV box
+  statBoxGen4: {
+    position: 'absolute' as const, top: '89.6%', left: '9%', right: '9%',
+    display: 'flex', flexDirection: 'column' as const, gap: '0.4cqw',
+  },
+  statRow: {
+    display: 'flex', alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: '1cqw',
+  },
+  statRowLabel: {
+    fontSize: '1.9cqw', fontWeight: 700 as const, color: '#5a4a10', letterSpacing: '0.5px',
+    minWidth: '3.5cqw',
+  },
+  statCell: { display: 'flex', alignItems: 'baseline' as const, gap: '0.6cqw', minWidth: 0 },
+  statKey: { fontSize: '1.6cqw', color: '#6a5a20', textTransform: 'uppercase' as const },
+  statVal: { fontSize: '2.5cqw', fontWeight: 700 as const, color: INK },
 } as const;
