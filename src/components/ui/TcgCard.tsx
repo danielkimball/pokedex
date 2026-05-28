@@ -134,21 +134,26 @@ function CssTemplate({ energyKey, gen }: { energyKey: string; gen: number }) {
       }} />
       {/* gold subtitle bar — aligned with SUBTITLE_POS so the OT text sits on it. */}
       <div style={{
-        position: 'absolute', left: '11%', right: '7%',
+        position: 'absolute', left: '8%', right: '8%',
         top: '54.5%',
         height: '4cqw',
         background: 'linear-gradient(180deg, #f0c84a, #b08020 50%, #f0c84a 100%)',
         borderRadius: '0.4cqw', boxShadow: '0 0.2cqw 0.4cqw rgba(0,0,0,0.25)',
       }} />
-      {/* 1st-Ed-style left stamp */}
+      {/* Gen 1 only: 1st-Edition-style black stamp at the left of the subtitle bar.
+          Gen 4 cards never had this — omit for non-Gen-1 to avoid the "black hole". */}
+      {!isGen4 && (
+        <div style={{
+          position: 'absolute', left: '4.5%', top: '53.5%', width: '6cqw', height: '6cqw',
+          background: '#1a1a1a', borderRadius: '50%',
+          border: '0.3cqw solid #b08020',
+        }} />
+      )}
+      {/* bottom stat-box outline — sized + positioned to hug the IV/EV rows. */}
       <div style={{
-        position: 'absolute', left: '4.5%', top: '53.5%', width: '6cqw', height: '6cqw',
-        background: '#1a1a1a', borderRadius: '50%',
-        border: '0.3cqw solid #b08020',
-      }} />
-      {/* bottom info-box outline */}
-      <div style={{
-        position: 'absolute', left: '8%', right: '8%', top: '88.5%', height: '8.5cqw',
+        position: 'absolute', left: '7%', right: '7%',
+        top: isGen4 ? '90.5%' : '88.5%',
+        bottom: '2%',
         border: '0.25cqw solid #b08020', borderRadius: '0.5cqw',
         background: 'rgba(255,255,255,0.08)',
       }} />
@@ -202,8 +207,9 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
     ['SPA', record.evs.spa], ['SPD', record.evs.spd], ['SPE', record.evs.spe],
   ];
 
-  // Attacks shift down when an Ability box is present (Gen 3+).
-  const attacksTop = showAbility ? '67%' : '60.5%';
+  // Ability now sits inline next to nature in the name row (no box), so attacks
+  // always start at the same height regardless of generation.
+  const attacksTop = '60.5%';
 
   const win = usePng
     ? (ART_WINDOW[energyKey] ?? DEFAULT_WINDOW)
@@ -220,15 +226,23 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
       <img
         src={art}
         alt={speciesName}
-        style={{ ...S.art, left: `${win.left}%`, top: `${win.top}%`, width: `${win.width}%`, height: `${win.height}%` }}
+        // Gen 4 uses `contain` so wider crops never lose ears/tails to overflow;
+        // Gen 1 stays on `cover` so its painted scene fills its tighter frame.
+        style={{
+          ...S.art,
+          left: `${win.left}%`, top: `${win.top}%`,
+          width: `${win.width}%`, height: `${win.height}%`,
+          objectFit: gen >= 4 ? 'contain' : 'cover',
+        }}
         onError={(e) => { e.currentTarget.src = defaultSpriteUrl(record.species); }}
       />
 
-      {/* Stage + name + (nature inline for Gen 3+) */}
+      {/* Stage + name + ability + nature, all inline (Gen 3+ shows ability/nature). */}
       <div style={S.stage}>{stageLabel(record.species, gen)} Pokémon</div>
       <div style={S.name}>
         {title}{record.isShiny && <span style={S.shiny}> ★</span>}
         <span style={S.lv}> Lv{record.level}</span>
+        {abilityName && <span style={S.abilityInline}> {'·'} {abilityName}</span>}
         {natureName && <span style={S.natureInline}> {'·'} {natureName}</span>}
       </div>
 
@@ -242,14 +256,6 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
       <div style={{ ...S.subtitle, ...(SUBTITLE_POS[energyKey] ?? SUBTITLE_POS.lightning) }}>
         OT: {record.otName || 'Unknown'} {'·'} Game: {game} {'·'} {dex3}/{dexMax}
       </div>
-
-      {/* Ability box (Gen 3+, Poké-Body style) */}
-      {showAbility && abilityName && (
-        <div style={S.abilityBox}>
-          <span style={S.abilityLabel}>ABILITY</span>
-          <span style={S.abilityName}>{abilityName}</span>
-        </div>
-      )}
 
       {/* Attacks */}
       <div style={{ ...S.attacks, top: attacksTop }}>
@@ -346,6 +352,8 @@ const S = {
   shiny: { color: '#b8860b', fontSize: '4cqw' },
   lv: { fontSize: '3cqw', fontWeight: 700 as const, color: '#3a3a3a' },
   natureInline: { fontSize: '2.6cqw', fontWeight: 600 as const, color: '#4a3a00' },
+  // Ability sits inline with nature in the name row (Gen 4+) — no separate box.
+  abilityInline: { fontSize: '2.6cqw', fontWeight: 700 as const, color: '#8a3a00' },
 
   hp: {
     position: 'absolute' as const, top: '5%', right: '11%',
@@ -361,22 +369,6 @@ const S = {
     textAlign: 'center' as const, fontSize: '2.3cqw', fontWeight: 700 as const,
     color: '#2c2200', whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const,
   },
-
-  // Ability box (Gen 3+) — sits between subtitle and attacks like a Poké-Body.
-  abilityBox: {
-    position: 'absolute' as const, top: '60%', left: '11%', right: '11%',
-    display: 'flex', alignItems: 'center' as const, gap: '1.5cqw',
-    padding: '0.7cqw 1.4cqw',
-    background: 'linear-gradient(180deg, rgba(255,255,255,0.65), rgba(255,255,255,0.32))',
-    border: '0.25cqw solid #b08020',
-    borderRadius: '0.6cqw',
-    boxShadow: 'inset 0 0.2cqw 0.3cqw rgba(255,255,255,0.6)',
-  },
-  abilityLabel: {
-    fontSize: '2cqw', fontWeight: 700 as const, letterSpacing: '0.5px',
-    color: '#8a3a00', textTransform: 'uppercase' as const, flexShrink: 0,
-  },
-  abilityName: { fontSize: '3.4cqw', fontWeight: 700 as const, color: INK },
 
   attacks: {
     position: 'absolute' as const, left: '11%', right: '11%',
@@ -409,9 +401,10 @@ const S = {
   dvStat: { fontSize: '2cqw', color: '#6a5a20', textTransform: 'uppercase' as const },
   dvVal: { fontSize: '3.2cqw', fontWeight: 700 as const, color: INK },
 
-  // Gen 3+ two-row IV/EV box
+  // Gen 3+ two-row IV/EV box — dropped lower so the 4-attack list above doesn't
+  // overlap once the ability box was removed.
   statBoxGen4: {
-    position: 'absolute' as const, top: '89.6%', left: '9%', right: '9%',
+    position: 'absolute' as const, top: '91.5%', left: '9%', right: '9%',
     display: 'flex', flexDirection: 'column' as const, gap: '0.4cqw',
   },
   statRow: {
