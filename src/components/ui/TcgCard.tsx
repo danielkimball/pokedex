@@ -20,28 +20,12 @@ import { MOVE_PP, MOVE_TYPE } from '../../core/constants/moves-data';
 import { EVOLUTIONS } from '../../core/constants/evolutions';
 import { GEN1_CARD_ARTIST } from '../../core/constants/gen1-card-artist';
 import { gen1CardArt, defaultSpriteUrl, monSpriteUrl } from '../../core/constants/games';
+import { tcgEnergyUrl } from '../../core/constants/energies';
 
 const TEMPLATE = '/cards/gen1/templates/electric.jpg';
 const WIN = { left: 10.7, top: 12.3, width: 78.5, height: 40.1 };
 
-/**
- * Game type -> Base Set TCG energy. The 1999 sets folded the 17 game types into
- * 7 energy categories (Lightning/Fire/Water/Grass/Psychic/Fighting/Colorless).
- * The PNGs in /cards/gen1/energies are the flat 1999 symbols cropped from the
- * Base Set energy cards.
- */
-const ENERGY_FILE: Record<string, string> = {
-  Electric: 'lightning',
-  Fire: 'fire',
-  Water: 'water', Ice: 'water',
-  Grass: 'grass', Bug: 'grass', Poison: 'grass',
-  Psychic: 'psychic', Ghost: 'psychic',
-  Fighting: 'fighting', Rock: 'fighting', Ground: 'fighting',
-  Normal: 'colorless', Flying: 'colorless', Dragon: 'colorless',
-  // also accept TCG names directly
-  Lightning: 'lightning', Colorless: 'colorless',
-};
-const energy = (type: string) => `/cards/gen1/energies/${ENERGY_FILE[type] ?? 'colorless'}.png`;
+const energy = tcgEnergyUrl;
 
 const WEAKNESS: Record<string, string> = { Electric: 'Ground' };
 const GEN_MAX_DEX: Record<number, number> = { 1: 151, 2: 251, 3: 386, 4: 493 };

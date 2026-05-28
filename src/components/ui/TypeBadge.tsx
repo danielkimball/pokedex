@@ -1,30 +1,17 @@
-// Maps type name (Title Case) to the actual image filename
-const TYPE_IMAGES: Record<string, string> = {
-  Normal: 'normal.png',
-  Fighting: 'fighting.png',
-  Flying: 'flying.png',
-  Poison: 'poison.png',
-  Ground: 'ground.png',
-  Rock: 'Rock.png',
-  Bug: 'bug.png',
-  Ghost: 'ghost.png',
-  Steel: 'steel.png',
-  Fire: 'fire.png',
-  Water: 'water.png',
-  Grass: 'grass.png',
-  Electric: 'Electric.png',
-  Psychic: 'psychic.png',
-  Ice: 'ice.png',
-  Dragon: 'Dragon.png',
-  Dark: 'dark.png',
-};
+/**
+ * Small type badge used in the dex list, party, PC and Pokedex Home.
+ * Renders the flat 1999 Base Set TCG energy icon that the type folds into
+ * (Bug -> Grass, Ice -> Water, etc.), keeping the whole app's icon style
+ * consistent with the Base Set cards.
+ */
+
+import { TYPE_TO_TCG_ENERGY, tcgEnergyUrl } from '../../core/constants/energies';
 
 export function TypeBadge({ type }: { type: string }) {
-  const filename = TYPE_IMAGES[type];
-  if (filename) {
+  if (TYPE_TO_TCG_ENERGY[type]) {
     return (
       <img
-        src={`/energyImages/${filename}`}
+        src={tcgEnergyUrl(type)}
         alt={type}
         title={type}
         style={{ width: '16px', height: '16px', objectFit: 'contain' }}
