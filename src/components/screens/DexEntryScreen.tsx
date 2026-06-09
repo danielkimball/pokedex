@@ -4,7 +4,6 @@ import { useAppStore } from '../../state/store';
 import { SPECIES } from '../../core/constants/species';
 import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { EVOLUTIONS } from '../../core/constants/evolutions';
-import { LOCATIONS } from '../../core/constants/locations';
 import { NATURES, NATURE_EFFECTS } from '../../core/constants/natures';
 import { MOVES } from '../../core/constants/moves';
 import { ABILITIES } from '../../core/constants/abilities';
@@ -16,7 +15,10 @@ import { TcgCard } from '../ui/TcgCard';
 import { getGender } from '../../core/utils/gender';
 import { ORIGIN_GAMES } from '../../core/constants/origin-games';
 import { spriteUrl, defaultSpriteUrl, monSpriteUrl, monCardArt, gameLabel, genLabel } from '../../core/constants/games';
+import { gen4CatchView, gen4Tips, GEN4_GAME_LABEL } from '../../core/constants/gen4-dex-data';
 import type { PokedexShellContext } from '../layout/PokedexShell';
+
+const ROMAN_PANEL = ['', 'I', 'II', 'III', 'IV'];
 
 // Species-level sprite (generation-neutral) for the dex identity + evolution chain.
 const SPRITE_URL = (n: number) => defaultSpriteUrl(n);
@@ -66,11 +68,11 @@ export function DexEntryScreen() {
   const saves = useAppStore(s => s.saves);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [locationsOpen, setLocationsOpen] = useState(false);
   const [evoOpen, setEvoOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(true);
   const [pokemonRecords, setPokemonRecords] = useState<PokemonRecord[]>([]);
   const [cardIndex, setCardIndex] = useState(0);
+  const [panelGen, setPanelGen] = useState(4); // which generation's catch data the data panel shows
   const { setActivePanel, setSidePanel } = useOutletContext<PokedexShellContext>();
 
   // ── draggable card track ──────────────────────────────────────────────
@@ -101,44 +103,65 @@ export function DexEntryScreen() {
     }, { once: true });
   }, []);
 
-  const handleTrackTouchStart = useCallback((e: React.TouchEvent) => {
-    dragStartXRef.current = e.touches[0].clientX;
-    dragStartYRef.current = e.touches[0].clientY;
-    draggingRef.current = true;
-    gestureLockRef.current = null; // reset direction on each new touch
-  }, []);
+  // Live record count, read by the native touch handlers without re-binding.
+  const countRef = useRef(0);
+  useEffect(() => { countRef.current = pokemonRecords.length; }, [pokemonRecords.length]);
 
-  const handleTrackTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!draggingRef.current || !cardTrackRef.current) return;
-    const dx = e.touches[0].clientX - dragStartXRef.current;
-    const dy = e.touches[0].clientY - dragStartYRef.current;
+  // Callback ref: binds the swipe as a NON-PASSIVE touch listener so we can
+  // call preventDefault() the instant a horizontal swipe is detected, which
+  // stops the scroll container from sliding the view up/down mid-swipe. (React's
+  // synthetic onTouchMove is passive, so preventDefault there is a no-op — that
+  // was the cause of the vertical bleed.) A callback ref also re-binds cleanly
+  // whenever the carousel remounts (e.g. collapsing/expanding the section).
+  const attachTrack = useCallback((node: HTMLDivElement | null) => {
+    const prev = cardTrackRef.current as (HTMLDivElement & { _swipeCleanup?: () => void }) | null;
+    if (prev?._swipeCleanup) prev._swipeCleanup();
+    cardTrackRef.current = node;
+    if (!node) return;
 
-    // Lock gesture direction on first significant movement
-    if (gestureLockRef.current === null) {
-      if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return; // not moved enough yet
-      gestureLockRef.current = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
-      if (gestureLockRef.current === 'h') {
-        cardTrackRef.current.style.transition = 'none';
+    const onStart = (e: TouchEvent) => {
+      dragStartXRef.current = e.touches[0].clientX;
+      dragStartYRef.current = e.touches[0].clientY;
+      draggingRef.current = true;
+      gestureLockRef.current = null;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!draggingRef.current) return;
+      const dx = e.touches[0].clientX - dragStartXRef.current;
+      const dy = e.touches[0].clientY - dragStartYRef.current;
+      if (gestureLockRef.current === null) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; // wait for a clear direction
+        gestureLockRef.current = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+        if (gestureLockRef.current === 'h') node.style.transition = 'none';
       }
-    }
-
-    if (gestureLockRef.current !== 'h') return; // vertical scroll — don't touch the track
-    cardTrackRef.current.style.transform = `translateX(calc(-100% + ${dx}px))`;
-  }, []);
-
-  const handleTrackTouchEnd = useCallback((e: React.TouchEvent, count: number) => {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    if (gestureLockRef.current !== 'h') return; // was a scroll, nothing to do
-    const dx = e.changedTouches[0].clientX - dragStartXRef.current;
-    if (Math.abs(dx) > 55 && count > 1) {
-      slideToCard(dx < 0 ? 'next' : 'prev', count);
-    } else {
-      if (cardTrackRef.current) {
-        cardTrackRef.current.style.transition = 'transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1)';
-        cardTrackRef.current.style.transform = 'translateX(-100%)';
+      if (gestureLockRef.current !== 'h') return; // vertical scroll — leave the page alone
+      e.preventDefault(); // suppress vertical scroll for the duration of the swipe
+      node.style.transform = `translateX(calc(-100% + ${dx}px))`;
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      if (gestureLockRef.current !== 'h') return;
+      const count = countRef.current;
+      const dx = e.changedTouches[0].clientX - dragStartXRef.current;
+      if (Math.abs(dx) > 55 && count > 1) {
+        slideToCard(dx < 0 ? 'next' : 'prev', count);
+      } else {
+        node.style.transition = 'transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1)';
+        node.style.transform = 'translateX(-100%)';
       }
-    }
+    };
+
+    node.addEventListener('touchstart', onStart, { passive: true });
+    node.addEventListener('touchmove', onMove, { passive: false });
+    node.addEventListener('touchend', onEnd, { passive: true });
+    node.addEventListener('touchcancel', onEnd, { passive: true });
+    (node as HTMLDivElement & { _swipeCleanup?: () => void })._swipeCleanup = () => {
+      node.removeEventListener('touchstart', onStart);
+      node.removeEventListener('touchmove', onMove);
+      node.removeEventListener('touchend', onEnd);
+      node.removeEventListener('touchcancel', onEnd);
+    };
   }, [slideToCard]);
 
   const dexNum = Number(number);
@@ -171,116 +194,153 @@ export function DexEntryScreen() {
   const evolvesTo: { species: number; method: string }[] | null = evoInfo?.evolvesTo ?? null;
   const evoMethod: string | null = evoInfo?.method ?? null;
 
-  // Location data
-  const locInfo = LOCATIONS?.[dexNum];
-
-  // Game location entries
-  const gameLocations: { game: string; locs: string[] }[] = [];
-  if (locInfo) {
-    if (locInfo.heartgold?.length) gameLocations.push({ game: 'HeartGold', locs: locInfo.heartgold });
-    if (locInfo.soulsilver?.length) gameLocations.push({ game: 'SoulSilver', locs: locInfo.soulsilver });
-    if (locInfo.platinum?.length) gameLocations.push({ game: 'Platinum', locs: locInfo.platinum });
-    if (locInfo.diamond?.length) gameLocations.push({ game: 'Diamond', locs: locInfo.diamond });
-    if (locInfo.pearl?.length) gameLocations.push({ game: 'Pearl', locs: locInfo.pearl });
-  }
-
-  const hgLocations = locInfo?.heartgold ?? [];
-  const ssLocations = locInfo?.soulsilver ?? [];
-  const primaryMethod = evoMethod ?? hgLocations[0] ?? ssLocations[0] ?? gameLocations[0]?.locs[0] ?? 'No location data imported yet';
+  // The copy currently shown in the carousel — drives the data panel's moveset.
   const selectedRecord = pokemonRecords[cardIndex] ?? pokemonRecords[0] ?? null;
-  const selectedSaveName = selectedRecord ? saveNameMap.get(selectedRecord.saveId) : null;
-  const selectedOriginGame = selectedRecord?.originGame != null
-    ? ORIGIN_GAMES[selectedRecord.originGame]
-    : selectedSaveName?.match(/\(([^)]+)\)$/)?.[1] ?? null;
-  const selectedStorage = selectedRecord
-    ? selectedRecord.location === 'party'
-      ? `Party slot ${selectedRecord.slotIndex + 1}`
-      : `Box ${selectedRecord.containerIndex + 1}, slot ${selectedRecord.slotIndex + 1}`
-    : 'No saved Pokemon found';
-  const factGame = selectedOriginGame || 'this save';
 
   useEffect(() => {
+    const chainIdx = chain.indexOf(dexNum);
+    const evoFrom = chainIdx > 0 ? chain[chainIdx - 1] : null;
+    const catchView = gen4CatchView(dexNum, panelGen);
+    const tips = panelGen === 4 ? gen4Tips(dexNum) : [];
+
+    const rec = selectedRecord;
+    const recMoves = rec ? rec.moves.filter(m => m !== 0).map(m => MOVES[m] || `Move #${m}`) : [];
+    const recNature = rec ? (NATURES[rec.nature] || null) : null;
+    const recAbility = rec && rec.ability ? (ABILITIES[rec.ability] || `Ability #${rec.ability}`) : null;
+    const recItem = rec && rec.heldItem ? getItemName(rec.heldItem) : null;
+    const recLoc = rec
+      ? rec.location === 'party'
+        ? `Party ${rec.slotIndex + 1}`
+        : `Box ${rec.containerIndex + 1}, slot ${rec.slotIndex + 1}`
+      : null;
+    const total = pokemonRecords.length;
+
     setSidePanel(
-      <div style={sx.sidePanel}>
-        <div style={sx.panelHeader}>
+      <div style={dp.panel}>
+        {/* Header */}
+        <div style={dp.header}>
           <div>
-            <div style={sx.panelKicker}>DATA PANEL</div>
-            <div style={sx.panelTitle}>{name}</div>
+            <div style={dp.kicker}>DEX DATA</div>
+            <div style={dp.title}>{name}</div>
           </div>
-          <button style={sx.returnBtn} onClick={() => setActivePanel(0)}>MAIN</button>
+          <div style={dp.headerRight}>
+            <span style={dp.dexNum}>#{String(dexNum).padStart(3, '0')}</span>
+            <button style={dp.mainBtn} onClick={() => setActivePanel(0)}>{'MAIN ▸'}</button>
+          </div>
         </div>
 
-        <div style={sx.blackDisplay}>
-          <div style={sx.blackDisplayCut}>
+        {/* About + generation selector */}
+        <div style={dp.about}>
+          <div style={dp.aboutSpriteBox}>
             <img
-              src={selectedRecord ? monSpriteUrl(selectedRecord) : spriteUrl(dexNum)}
+              src={rec ? monSpriteUrl(rec) : spriteUrl(dexNum)}
               alt={name}
-              style={sx.scopeSprite}
+              style={dp.aboutSprite}
               onError={(e) => spriteFallback(e, dexNum)}
             />
-            <div style={sx.displayList}>
-              <div style={sx.displayItem}><span style={sx.displayLabel}>Current</span><strong style={sx.displayValue}>{selectedStorage}</strong></div>
-              <div style={sx.displayItem}><span style={sx.displayLabel}>Caught</span><strong style={sx.displayValue}>{selectedRecord ? 'Met location not parsed' : 'Unknown'}</strong></div>
-              <div style={sx.displayItem}><span style={sx.displayLabel}>OT</span><strong style={sx.displayValue}>{selectedRecord?.otName || 'Unknown'}</strong></div>
-              <div style={sx.displayItem}><span style={sx.displayLabel}>Origin</span><strong style={sx.displayValue}>{selectedOriginGame || 'Unknown'}</strong></div>
-              <div style={sx.displayItem}><span style={sx.displayLabel}>Save</span><strong style={sx.displayValue}>{selectedSaveName || 'No save linked'}</strong></div>
-            </div>
+          </div>
+          <div style={dp.aboutMeta}>
+            <div style={dp.typeRow}>{types.map(t => <TypeBadge key={t} type={t} />)}</div>
+            <select
+              style={dp.genSelect}
+              value={panelGen}
+              onChange={(e) => setPanelGen(Number(e.target.value))}
+            >
+              <option value={4}>Gen IV · HG/SS · Pt · D/P</option>
+              <option value={3}>Gen III</option>
+              <option value={2}>Gen II</option>
+              <option value={1}>Gen I</option>
+            </select>
           </div>
         </div>
 
-        <div style={sx.statMatrix}>
-          <div style={sx.statRowLabel}>IV</div>
-          {(['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const).map(stat => (
-            <div key={`iv-${stat}`} style={sx.statCell}>
-              <span>{stat.toUpperCase()}</span>
-              <strong>{selectedRecord ? selectedRecord.ivs[stat] : '--'}</strong>
+        {/* Evolution */}
+        <div style={dp.section}>
+          <div style={dp.sectionTitle}>Evolution</div>
+          {evoFrom && (
+            <div style={dp.evoLine} onClick={() => { navigate(`/dex/${evoFrom}`); scrollRef.current?.scrollTo(0, 0); }}>
+              <img src={SPRITE_URL(evoFrom)} alt="" style={dp.evoMini} />
+              <span>From <strong>{SPECIES[evoFrom]}</strong>{evoMethod ? ` · ${evoMethod}` : ''}</span>
+            </div>
+          )}
+          {evolvesTo && evolvesTo.length > 0 && evolvesTo.map(ev => (
+            <div key={ev.species} style={dp.evoLine} onClick={() => { navigate(`/dex/${ev.species}`); scrollRef.current?.scrollTo(0, 0); }}>
+              <img src={SPRITE_URL(ev.species)} alt="" style={dp.evoMini} />
+              <span>Into <strong>{SPECIES[ev.species]}</strong> · {ev.method}</span>
             </div>
           ))}
-          <div style={sx.statRowLabel}>EV</div>
-          {(['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const).map(stat => (
-            <div key={`ev-${stat}`} style={sx.statCell}>
-              <span>{stat.toUpperCase()}</span>
-              <strong>{selectedRecord ? selectedRecord.evs[stat] : '--'}</strong>
+          {!evoFrom && !(evolvesTo && evolvesTo.length > 0) && (
+            <div style={dp.muted}>Does not evolve.</div>
+          )}
+        </div>
+
+        {/* Where to catch */}
+        <div style={dp.section}>
+          <div style={dp.sectionTitle}>Where to Catch · Gen {ROMAN_PANEL[panelGen]}</div>
+          {panelGen !== 4 ? (
+            <div style={dp.muted}>Detailed catch data is Gen IV only for now.</div>
+          ) : catchView.catchable.length === 0 ? (
+            <div style={dp.muted}>
+              {catchView.tradeOnly.length > 0 ? 'Trade / transfer only this generation.' : 'Obtained by evolution.'}
             </div>
+          ) : (
+            catchView.catchable.map(gc => (
+              <div key={gc.label} style={dp.catchBlock}>
+                <div style={dp.catchGame}>
+                  {gc.label}{gc.via !== 'wild' ? ` · ${gc.via === 'gift' ? 'Gift' : 'Event'}` : ''}
+                </div>
+                {gc.lines.map((ln, i) => (
+                  <div key={i} style={dp.catchLine}>
+                    <span style={dp.catchArea}>{ln.area}</span>
+                    {ln.detail && <span style={dp.catchDetail}>{ln.detail}</span>}
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
+          {panelGen === 4 && catchView.catchable.length > 0 && catchView.tradeOnly.length > 0 && (
+            <div style={dp.tradeOnly}>
+              Trade only: {catchView.tradeOnly.map(g => GEN4_GAME_LABEL[g]).join(', ')}
+            </div>
+          )}
+          {tips.map((tip, i) => (
+            <div key={i} style={dp.tip}><span style={dp.tipTag}>TIP</span><span>{tip}</span></div>
           ))}
+          {panelGen === 4 && !catchView.hasRich && catchView.catchable.length > 0 && (
+            <div style={dp.coarseNote}>Basic location only — deeper Gen IV detail is being added.</div>
+          )}
         </div>
 
-        <div style={sx.deviceButtons}>
-          <div style={sx.whiteKey} />
-          <div style={sx.whiteKey} />
-          <div style={sx.yellowKey} />
-        </div>
+        {/* This copy's moveset + meta */}
+        {rec && (
+          <div style={dp.section}>
+            <div style={dp.sectionTitle}>Your {name}{total > 1 ? ` · ${cardIndex + 1}/${total}` : ''}</div>
+            <div style={dp.moveGrid}>
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} style={recMoves[i] ? dp.moveCell : dp.moveCellEmpty}>{recMoves[i] || '—'}</div>
+              ))}
+            </div>
+            <div style={dp.recMeta}>
+              {recAbility && <span>{recAbility}</span>}
+              {recNature && <span>{recNature}</span>}
+              {recItem && <span>@ {recItem}</span>}
+            </div>
+            <div style={dp.recMetaDim}>
+              Lv {rec.level} · {recLoc}{rec.otName ? ` · OT ${rec.otName}` : ''}
+            </div>
+          </div>
+        )}
 
-        <div style={sx.factPanel}>
-          <div style={sx.blockTitle}>Field Notes</div>
-          <p style={sx.factText}>
-            Placeholder field note for {name} from {factGame}. Later this can use version-specific flavor text,
-            encounter method notes, or route memories if the save parser exposes met-location data.
-          </p>
-          <p style={sx.factText}>
-            Catch target: {primaryMethod}
-          </p>
-        </div>
-
-        <div style={sx.swipeHint}>Swipe right to return</div>
+        <div style={dp.swipeHint}>Swipe right to return</div>
       </div>
     );
 
     return () => setSidePanel(null);
-  }, [
-    cardIndex,
-    dexNum,
-    factGame,
-    name,
-    pokemonRecords,
-    primaryMethod,
-    selectedOriginGame,
-    selectedRecord,
-    selectedSaveName,
-    selectedStorage,
-    setActivePanel,
-    setSidePanel,
-  ]);
+    // dexNum drives chain/types/evo (pure fns of it); panelGen + selectedRecord
+    // cover the rest. Arrays like chain/types are intentionally omitted to avoid
+    // identity churn re-running this effect every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardIndex, dexNum, name, panelGen, pokemonRecords, selectedRecord, setActivePanel, setSidePanel, navigate]);
 
   if (!dexNum || dexNum < 1 || dexNum > 493) {
     return (
@@ -470,11 +530,8 @@ export function DexEntryScreen() {
                   return (
                     <div style={{ overflow: 'hidden' }} data-card-carousel="true">
                       <div
-                        ref={cardTrackRef}
-                        style={{ display: 'flex', transform: 'translateX(-100%)', willChange: 'transform' }}
-                        onTouchStart={handleTrackTouchStart}
-                        onTouchMove={handleTrackTouchMove}
-                        onTouchEnd={(e) => handleTrackTouchEnd(e, total)}
+                        ref={attachTrack}
+                        style={{ display: 'flex', transform: 'translateX(-100%)', willChange: 'transform', touchAction: 'pan-y' }}
                       >
                         <div style={{ flex: '0 0 100%' }}>
                           {total > 1 ? renderCard(pokemonRecords[(cardIndex - 1 + total) % total]) : null}
@@ -586,43 +643,11 @@ export function DexEntryScreen() {
           </div>
         )}
 
-        {/* Location */}
-        {(gameLocations.length > 0 || evoMethod) && (
-          <div style={s.section}>
-            <div
-              style={s.sectionToggle}
-              onClick={() => setLocationsOpen(!locationsOpen)}
-            >
-              <span style={s.sectionTitle}>LOCATION</span>
-              <span style={s.toggleArrow}>{locationsOpen ? '\u25BC' : '\u25B6'}</span>
-            </div>
-            {locationsOpen && <>
-              {evoMethod && (
-                <div style={{ marginBottom: '6px' }}>
-                  <div style={s.gameName}>Evolution</div>
-                  <div style={s.locationLine}>{evoMethod} from {SPECIES[chain[chain.indexOf(dexNum) - 1]] || '???'}</div>
-                </div>
-              )}
-              {gameLocations.map(gl => (
-                <div key={gl.game} style={{ marginBottom: '6px' }}>
-                  <div style={s.gameName}>{gl.game}</div>
-                  {gl.locs.map((loc, i) => (
-                    <div key={i} style={s.locationLine}>{loc}</div>
-                  ))}
-                </div>
-              ))}
-            </>}
-          </div>
-        )}
-
-        {/* If no game location data and not caught */}
-        {gameLocations.length === 0 && !LOCATIONS && !isCaught && (
-          <div style={s.section}>
-            <div style={{ fontSize: '11px', color: '#777777', textAlign: 'center' }}>
-              Import a save file containing this Pokemon to register it.
-            </div>
-          </div>
-        )}
+        {/* Where-to-catch, evolution detail, pro-tips and moveset now live in the
+            right-hand DATA panel \u2014 swipe left (or tap MAIN \u25B8 there to return). */}
+        <div style={s.dataHint} onClick={() => setActivePanel(1)}>
+          Swipe left for catch locations, evolution &amp; data {'\u25B8'}
+        </div>
       </div>
     </div>
   );
@@ -826,176 +851,248 @@ const s = {
     fontSize: '14px',
     marginTop: '40px',
   },
+  dataHint: {
+    marginTop: '4px',
+    padding: '10px',
+    border: '1px dashed #cc001c66',
+    borderRadius: '6px',
+    background: 'rgba(204,0,28,0.05)',
+    color: '#8f0014',
+    fontSize: '11px',
+    fontWeight: 'bold' as const,
+    textAlign: 'center' as const,
+    cursor: 'pointer',
+  },
 } as const;
 
-/** Styles for the anime-inspired right-side Pokedex panel */
-const sx = {
-  sidePanel: {
+/** Right-hand DATA panel — themed to match the cream dex screen, not a separate look. */
+const dp = {
+  panel: {
     height: '100%',
     overflowY: 'auto' as const,
     overflowX: 'hidden' as const,
-    padding: '8px',
-    background: '#b80018',
-    color: '#f4f1e8',
+    padding: '10px',
+    background: '#f4f1e8',
+    color: '#111111',
     WebkitOverflowScrolling: 'touch' as const,
   },
-  panelHeader: {
+  header: {
     display: 'flex',
     justifyContent: 'space-between' as const,
-    alignItems: 'center' as const,
-    marginBottom: '7px',
+    alignItems: 'flex-start' as const,
+    marginBottom: '8px',
     paddingBottom: '6px',
-    borderBottom: '2px solid rgba(49,0,6,0.55)',
+    borderBottom: '2px solid #cc001c33',
   },
-  panelKicker: {
+  kicker: {
     fontSize: '9px',
-    color: '#f6d54a',
-    letterSpacing: '1px',
-    textTransform: 'uppercase' as const,
+    color: '#cc001c',
+    letterSpacing: '2px',
+    fontWeight: 'bold' as const,
   },
-  panelTitle: {
-    color: '#f5fbff',
-    fontSize: '19px',
+  title: {
+    color: '#111111',
+    fontSize: '20px',
     fontWeight: 'bold' as const,
     lineHeight: 1.1,
-    textShadow: '0 2px 0 rgba(0,0,0,0.35)',
   },
-  returnBtn: {
-    color: '#101010',
+  headerRight: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'flex-end' as const,
+    gap: '5px',
+  },
+  dexNum: {
+    fontSize: '11px',
+    color: '#5d5142',
+  },
+  mainBtn: {
+    color: '#fff8e8',
+    background: '#cc001c',
+    border: 'none',
+    borderRadius: '5px',
+    fontSize: '10px',
+    fontWeight: 'bold' as const,
+    fontFamily: 'inherit',
+    padding: '5px 9px',
+    cursor: 'pointer',
+  },
+  about: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center' as const,
+    marginBottom: '10px',
+  },
+  aboutSpriteBox: {
+    width: '72px',
+    height: '72px',
+    flexShrink: 0,
+    borderRadius: '8px',
+    background: 'radial-gradient(circle at 50% 45%, #ffffff 0%, #e9dfc9 100%)',
+    border: '2px solid #cc001c33',
+    display: 'flex',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  aboutSprite: {
+    width: '60px',
+    height: '60px',
+    imageRendering: 'pixelated' as const,
+  },
+  aboutMeta: {
+    flex: 1,
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '6px',
+  },
+  typeRow: {
+    display: 'flex',
+    gap: '4px',
+    flexWrap: 'wrap' as const,
+  },
+  genSelect: {
+    width: '100%',
+    padding: '5px 6px',
+    background: '#fffaf0',
+    border: '1px solid #cc001c44',
+    borderRadius: '6px',
+    color: '#111111',
+    fontSize: '11px',
+    fontFamily: 'inherit',
+    outline: 'none',
+    cursor: 'pointer',
+  },
+  section: {
+    padding: '8px 9px',
+    border: '1px solid #22222218',
+    borderRadius: '6px',
+    marginBottom: '8px',
+    background: '#fffaf0',
+  },
+  sectionTitle: {
+    fontSize: '10px',
+    color: '#8f0014',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '1px',
+    fontWeight: 'bold' as const,
+    marginBottom: '6px',
+  },
+  muted: {
+    fontSize: '11px',
+    color: '#777',
+  },
+  evoLine: {
+    display: 'flex',
+    alignItems: 'center' as const,
+    gap: '7px',
+    padding: '3px 0',
+    fontSize: '11px',
+    color: '#222',
+    cursor: 'pointer',
+  },
+  evoMini: {
+    width: '28px',
+    height: '28px',
+    imageRendering: 'pixelated' as const,
+    flexShrink: 0,
+  },
+  catchBlock: {
+    marginBottom: '7px',
+  },
+  catchGame: {
+    fontSize: '11px',
+    fontWeight: 'bold' as const,
+    color: '#111111',
+    marginBottom: '2px',
+  },
+  catchLine: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    padding: '2px 0 2px 8px',
+    borderLeft: '2px solid #cc001c33',
+    marginBottom: '2px',
+  },
+  catchArea: {
+    fontSize: '11px',
+    color: '#222',
+  },
+  catchDetail: {
+    fontSize: '9px',
+    color: '#6a5d4a',
+  },
+  tradeOnly: {
+    fontSize: '9px',
+    color: '#998',
+    marginTop: '4px',
+    fontStyle: 'italic' as const,
+  },
+  tip: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'flex-start' as const,
+    marginTop: '6px',
+    padding: '6px 7px',
+    background: 'rgba(246,213,74,0.18)',
+    border: '1px solid #e8c64e88',
+    borderRadius: '5px',
+    fontSize: '10px',
+    color: '#5a4a10',
+    lineHeight: 1.35,
+  },
+  tipTag: {
+    fontSize: '8px',
+    fontWeight: 'bold' as const,
+    color: '#8a6d00',
     background: '#f6d54a',
-    border: '2px solid #5d4200',
+    borderRadius: '3px',
+    padding: '1px 4px',
+    flexShrink: 0,
+    letterSpacing: '0.5px',
+  },
+  coarseNote: {
+    fontSize: '9px',
+    color: '#aa9',
+    marginTop: '5px',
+  },
+  moveGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '5px',
+    marginBottom: '6px',
+  },
+  moveCell: {
+    padding: '6px 8px',
+    background: 'rgba(0,0,0,0.05)',
     borderRadius: '5px',
     fontSize: '11px',
     fontWeight: 'bold' as const,
-    padding: '6px 10px',
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45), 0 2px 0 rgba(0,0,0,0.28)',
+    color: '#1a1a1a',
   },
-  blackDisplay: {
-    padding: '8px',
-    marginBottom: '8px',
-    borderRadius: '6px',
-    background: '#8f0014',
-    border: '3px solid #5c000d',
-    boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -4px 0 rgba(0,0,0,0.16)',
+  moveCellEmpty: {
+    padding: '6px 8px',
+    background: 'rgba(0,0,0,0.03)',
+    borderRadius: '5px',
+    fontSize: '11px',
+    color: 'rgba(0,0,0,0.25)',
   },
-  blackDisplayCut: {
-    minHeight: '132px',
-    padding: '8px 10px 18px',
+  recMeta: {
     display: 'flex',
-    alignItems: 'center' as const,
-    gap: '10px',
-    background: 'linear-gradient(135deg, #101013 0%, #101013 72%, transparent 72%)',
-    border: '3px solid #3d0009',
-    clipPath: 'polygon(0 0, 100% 0, 100% 72%, 84% 100%, 0 100%)',
-  },
-  scopeSprite: {
-    width: '68px',
-    height: '68px',
-    imageRendering: 'pixelated' as const,
-    filter: 'drop-shadow(0 0 8px rgba(126,215,246,0.45))',
-    flexShrink: 0,
-  },
-  displayList: {
-    display: 'grid',
-    gap: '5px',
-    minWidth: 0,
-    flex: 1,
-  },
-  displayItem: {
-    display: 'grid',
-    gap: '1px',
-  },
-  displayLabel: {
-    color: '#8bdff0',
-    fontSize: '8px',
-    letterSpacing: '1px',
-    textTransform: 'uppercase' as const,
-  },
-  displayValue: {
-    color: '#f4f1e8',
+    flexWrap: 'wrap' as const,
+    gap: '4px 10px',
     fontSize: '10px',
-    lineHeight: 1.15,
+    color: '#333',
+    marginBottom: '3px',
   },
-  statMatrix: {
-    display: 'grid',
-    gridTemplateColumns: '22px repeat(6, minmax(0, 1fr))',
-    gap: '3px',
-    marginBottom: '8px',
-  },
-  statRowLabel: {
-    minHeight: '29px',
-    display: 'grid',
-    placeItems: 'center',
-    color: '#f4f1e8',
+  recMetaDim: {
     fontSize: '9px',
-    fontWeight: 'bold' as const,
-    background: '#5c000d',
-    border: '2px solid #3d0009',
-    borderRadius: '4px',
-  },
-  statCell: {
-    minHeight: '29px',
-    padding: '2px 1px',
-    background: 'linear-gradient(180deg, #8bdff0 0%, #45abc9 100%)',
-    border: '2px solid #255f72',
-    borderRadius: '4px',
-    color: '#092b34',
-    display: 'grid',
-    alignContent: 'center' as const,
-    gap: '2px',
-    fontSize: '8px',
-    lineHeight: 1,
-    textAlign: 'center' as const,
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5)',
-  },
-  deviceButtons: {
-    display: 'flex',
-    alignItems: 'center' as const,
-    gap: '6px',
-    margin: '7px 0 9px',
-  },
-  whiteKey: {
-    width: '42px',
-    height: '20px',
-    background: '#f4f1e8',
-    border: '2px solid #65575a',
-    borderRadius: '4px',
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8), 0 2px 0 rgba(0,0,0,0.25)',
-  },
-  yellowKey: {
-    marginLeft: 'auto',
-    width: '31px',
-    height: '31px',
-    borderRadius: '50%',
-    background: 'radial-gradient(circle at 35% 30%, #fff4a0 0%, #f6d54a 45%, #a87600 100%)',
-    border: '2px solid #5d4200',
-    boxShadow: '0 0 10px rgba(246,213,74,0.45)',
-  },
-  factPanel: {
-    marginBottom: '10px',
-    padding: '9px',
-    borderRadius: '6px',
-    background: 'rgba(22, 7, 10, 0.56)',
-    border: '2px solid rgba(246,213,74,0.28)',
-  },
-  blockTitle: {
-    color: '#f6d54a',
-    fontSize: '10px',
-    letterSpacing: '1px',
-    textTransform: 'uppercase' as const,
-    marginBottom: '6px',
-  },
-  factText: {
-    color: '#f5fbff',
-    fontSize: '12px',
-    lineHeight: 1.35,
-    margin: '0 0 8px',
+    color: '#6a5d4a',
   },
   swipeHint: {
-    color: 'rgba(245,251,255,0.68)',
+    color: '#5d514288',
     fontSize: '10px',
     textAlign: 'center' as const,
-    paddingBottom: '4px',
+    padding: '4px 0 8px',
   },
 } as const;
 

@@ -9,6 +9,7 @@ import { getAllSaves } from '../db/save-store';
 import { getDirectoryRecord, getFileRecord } from '../db/directory-store';
 import { scanForSaveFiles, getChangedFiles } from '../core/sync/directory-scanner';
 import { importSaveBuffer } from '../state/actions/import-save';
+import { refreshActiveDropboxGame } from '../state/actions/dropbox-refresh';
 
 export function usePokedexRegistry() {
   const registryMap = useAppStore(s => s.registryMap);
@@ -129,6 +130,10 @@ export function useInitializeApp() {
     function handleVisibilityChange() {
       if (document.visibilityState !== 'visible') return;
 
+      // Pull the latest active Dropbox save on focus (has its own debounce).
+      // This is the "save in Delta → open Pokedex and it's current" path.
+      refreshActiveDropboxGame();
+
       // Debounce: skip if last sync was less than 5 seconds ago
       const now = Date.now();
       if (now - lastDeltaSyncRef.current < 5000) return;
@@ -137,6 +142,9 @@ export function useInitializeApp() {
     }
 
     init();
+
+    // Also attempt a Dropbox pull on cold start.
+    refreshActiveDropboxGame();
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {

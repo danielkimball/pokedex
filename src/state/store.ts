@@ -31,6 +31,7 @@ export interface AppState {
   dexSort: DexSort;
   dexShow: DexShow;
   dexVersion: DexVersion;
+  dexView: DexView;           // list (rows) vs card (3-col TCG grid)
   dexGen: number | null;      // National Dex generation slice (1-4), null = all
   dexSaveId: string | null;   // focus on a single imported save, null = all
 
@@ -53,6 +54,7 @@ export interface AppState {
   setDexSort: (sort: DexSort) => void;
   setDexShow: (show: DexShow) => void;
   setDexVersion: (version: DexVersion) => void;
+  setDexView: (view: DexView) => void;
   setDexGen: (gen: number | null) => void;
   setDexSaveId: (id: string | null) => void;
   setConnectedDirectory: (name: string | null) => void;
@@ -62,9 +64,11 @@ export interface AppState {
 
 export type DexVersion = 'all' | 'heartgold' | 'soulsilver' | 'diamond' | 'pearl' | 'platinum';
 
-export type DexSort = 'number' | 'name' | 'level-desc' | 'level-asc';
+export type DexSort = 'number' | 'name' | 'level-desc' | 'level-asc' | 'type';
 
 export type DexShow = 'all' | 'caught' | 'uncaught';
+
+export type DexView = 'list' | 'card';
 
 export interface DexFilter {
   caughtOnly: boolean;
@@ -95,6 +99,7 @@ export const useAppStore = create<AppState>((set) => ({
   dexSort: 'number' as DexSort,
   dexShow: 'all' as DexShow,
   dexVersion: 'all' as DexVersion,
+  dexView: 'list' as DexView,
   dexGen: null,
   dexSaveId: null,
   syncSupported: typeof window !== 'undefined' && 'showDirectoryPicker' in window,
@@ -118,6 +123,7 @@ export const useAppStore = create<AppState>((set) => ({
   setDexSort: (dexSort) => set({ dexSort }),
   setDexShow: (dexShow) => set({ dexShow }),
   setDexVersion: (dexVersion) => set({ dexVersion }),
+  setDexView: (dexView) => set({ dexView }),
   setDexGen: (dexGen) => set({ dexGen }),
   setDexSaveId: (dexSaveId) => set({ dexSaveId }),
   setConnectedDirectory: (connectedDirectory) => set({ connectedDirectory }),

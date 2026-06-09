@@ -15,7 +15,7 @@ import { getPokemonIdentity } from '../../core/diff/pokemon-identity';
 import { diffSnapshots } from '../../core/diff/diff-engine';
 import { addSave, getAllSaves } from '../../db/save-store';
 import { addPokemonBatch, deletePokemonBySave } from '../../db/pokemon-store';
-import { updateRegistryFromSave } from '../../db/registry-store';
+import { updateRegistryFromSave, getAllRegistryEntries } from '../../db/registry-store';
 import { addSnapshot, getLatestSnapshot } from '../../db/snapshot-store';
 import type { SaveRecord, PokemonRecord, SnapshotRecord } from '../../db/schema';
 import type { DiffResult } from '../../core/diff/diff-types';
@@ -23,6 +23,19 @@ import { useAppStore } from '../store';
 
 function generateId(): string {
   return crypto.randomUUID();
+}
+
+/**
+ * Push freshly-persisted save + registry data into the in-memory store so every
+ * screen reflects the import immediately. Without this, the Zustand `registryMap`
+ * stays stale after a Dropbox/Drive/file re-import and the app appears unchanged
+ * until a full reload — the "I have to completely exit the app" bug.
+ */
+async function refreshStoreAfterImport(): Promise<void> {
+  const store = useAppStore.getState();
+  const [saves, entries] = await Promise.all([getAllSaves(), getAllRegistryEntries()]);
+  store.setSaves(saves);
+  store.setRegistry(entries);
 }
 
 /**
@@ -198,9 +211,8 @@ export async function importSaveBuffer(buffer: ArrayBuffer, filename: string): P
       store.setLastDiffResult(diffResult);
     }
 
-    // Refresh saves list
-    const allSaves = await getAllSaves();
-    store.setSaves(allSaves);
+    // Refresh saves list + registry so the UI updates without an app restart.
+    await refreshStoreAfterImport();
 
     return diffResult;
   } catch (err) {
@@ -299,5 +311,5 @@ async function persistLegacySave(
   await addSnapshot(snapshot);
 
   store.setActiveSave(saveId, null);
-  store.setSaves(await getAllSaves());
+  await refreshStoreAfterImport();
 }

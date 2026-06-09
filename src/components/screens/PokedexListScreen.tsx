@@ -1,13 +1,14 @@
 import { useRef, useMemo, useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useAppStore, type DexSort, type DexShow, type DexVersion } from '../../state/store';
+import { useAppStore, type DexSort, type DexShow, type DexVersion, type DexView } from '../../state/store';
 import { SPECIES } from '../../core/constants/species';
 import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { LOCATIONS } from '../../core/constants/locations';
 import { getAllPokemon } from '../../db/pokemon-store';
 import { gameLabel, defaultSpriteUrl } from '../../core/constants/games';
 import { TypeBadge } from '../ui/TypeBadge';
+import { DexCardView } from './DexCardView';
 
 const SPRITE_URL = (n: number) => defaultSpriteUrl(n);
 
@@ -101,6 +102,8 @@ export function PokedexListScreen() {
   const setDexGen = useAppStore(s => s.setDexGen);
   const dexSaveId = useAppStore(s => s.dexSaveId);
   const setDexSaveId = useAppStore(s => s.setDexSaveId);
+  const dexView = useAppStore(s => s.dexView);
+  const setDexView = useAppStore(s => s.setDexView);
   const saves = useAppStore(s => s.saves);
 
   // Build max-level lookup per species (for level sorting) and the set of
@@ -248,10 +251,23 @@ export function PokedexListScreen() {
         <button style={s.backBtn} onClick={() => navigate('/')}>
           {'<'} BACK
         </button>
-        <span style={s.headerCount}>
-          {caughtInView}/{genTotal}
-          {focusedSave ? ` · ${gameLabel(focusedSave)}` : dexGen ? ` · Gen ${GEN_OPTIONS.find(o => o.value === dexGen)?.label}` : ''}
-        </span>
+        <div style={s.headerRight}>
+          <div style={s.viewToggle}>
+            {(['list', 'card'] as DexView[]).map(v => (
+              <button
+                key={v}
+                style={dexView === v ? s.viewToggleActive : s.viewToggleBtn}
+                onClick={() => setDexView(v)}
+              >
+                {v === 'list' ? 'List' : 'Cards'}
+              </button>
+            ))}
+          </div>
+          <span style={s.headerCount}>
+            {caughtInView}/{genTotal}
+            {focusedSave ? ` · ${gameLabel(focusedSave)}` : dexGen ? ` · Gen ${GEN_OPTIONS.find(o => o.value === dexGen)?.label}` : ''}
+          </span>
+        </div>
       </div>
 
       {/* Search */}
@@ -284,6 +300,14 @@ export function PokedexListScreen() {
           >
             Lv{dexSort === 'level-asc' ? '\u25B2' : '\u25BC'}
           </button>
+          {dexView === 'card' && (
+            <button
+              style={dexSort === 'type' ? s.chipActive : s.chip}
+              onClick={() => setDexSort('type')}
+            >
+              Type
+            </button>
+          )}
         </div>
         <div style={s.controlGroup}>
           <span style={s.controlLabel}>Show:</span>
@@ -330,6 +354,10 @@ export function PokedexListScreen() {
         </div>
       </div>
 
+      {dexView === 'card' ? (
+        <DexCardView />
+      ) : (
+        <>
       {/* Result count */}
       <div style={s.resultCount}>{showingLabel}</div>
 
@@ -389,6 +417,8 @@ export function PokedexListScreen() {
           })}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }
@@ -419,10 +449,40 @@ const s = {
     cursor: 'pointer',
     padding: '4px 8px',
   },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center' as const,
+    gap: '8px',
+  },
   headerCount: {
     fontSize: '12px',
     color: '#111111',
     fontWeight: 'bold' as const,
+  },
+  viewToggle: {
+    display: 'flex',
+    border: '1px solid #11111133',
+    borderRadius: '10px',
+    overflow: 'hidden' as const,
+  },
+  viewToggleBtn: {
+    padding: '3px 10px',
+    border: 'none',
+    background: 'transparent',
+    color: '#5d5142',
+    fontSize: '10px',
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+  },
+  viewToggleActive: {
+    padding: '3px 10px',
+    border: 'none',
+    background: '#cc001c',
+    color: '#fff8e8',
+    fontSize: '10px',
+    fontFamily: 'inherit',
+    fontWeight: 'bold' as const,
+    cursor: 'pointer',
   },
   toolbar: {
     padding: '6px 10px',

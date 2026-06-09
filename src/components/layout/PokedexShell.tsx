@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import '../../styles/pokedex-device.css';
 
@@ -27,60 +27,73 @@ export function PokedexShell() {
     });
   }, [activePanel, isDexEntry, sidePanel]);
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (!isDexEntry || !sidePanel) return;
+  // Live values for the native (non-passive) touch handlers, avoiding stale closures.
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const activePanelRef = useRef(activePanel);
+  const enabledRef = useRef(isDexEntry && !!sidePanel);
+  useEffect(() => { activePanelRef.current = activePanel; }, [activePanel]);
+  useEffect(() => { enabledRef.current = isDexEntry && !!sidePanel; }, [isDexEntry, sidePanel]);
 
-    const target = e.target;
-    if (target instanceof Element && target.closest('[data-card-carousel="true"]')) {
-      draggingRef.current = false;
-      return;
-    }
+  // Non-passive touch binding so a horizontal panel swipe can preventDefault()
+  // the page's vertical scroll — same seamlessness fix as the card carousel.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
 
-    startXRef.current = e.touches[0].clientX;
-    startYRef.current = e.touches[0].clientY;
-    draggingRef.current = true;
-    gestureLockRef.current = null;
-  }, [isDexEntry, sidePanel]);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!draggingRef.current || !trackRef.current || !isDexEntry || !sidePanel) return;
-    const dx = e.touches[0].clientX - startXRef.current;
-    const dy = e.touches[0].clientY - startYRef.current;
-
-    if (gestureLockRef.current === null) {
-      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
-      gestureLockRef.current = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'h' : 'v';
-      if (gestureLockRef.current === 'h') {
-        trackRef.current.style.transition = 'none';
+    const onStart = (e: TouchEvent) => {
+      if (!enabledRef.current) return;
+      const target = e.target;
+      if (target instanceof Element && target.closest('[data-card-carousel="true"]')) {
+        draggingRef.current = false;
+        return;
       }
-    }
+      startXRef.current = e.touches[0].clientX;
+      startYRef.current = e.touches[0].clientY;
+      draggingRef.current = true;
+      gestureLockRef.current = null;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!draggingRef.current || !trackRef.current || !enabledRef.current) return;
+      const dx = e.touches[0].clientX - startXRef.current;
+      const dy = e.touches[0].clientY - startYRef.current;
+      if (gestureLockRef.current === null) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        gestureLockRef.current = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'h' : 'v';
+        if (gestureLockRef.current === 'h') trackRef.current.style.transition = 'none';
+      }
+      if (gestureLockRef.current !== 'h') return;
+      e.preventDefault();
+      const ap = activePanelRef.current;
+      const blockedAtStart = ap === 0 && dx > 0;
+      const blockedAtEnd = ap === 1 && dx < 0;
+      const resistedDx = blockedAtStart || blockedAtEnd ? dx * 0.22 : dx;
+      trackRef.current.style.transform = `translateX(calc(-${ap * 100}% + ${resistedDx}px))`;
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      if (gestureLockRef.current !== 'h') return;
+      const dx = e.changedTouches[0].clientX - startXRef.current;
+      const nextPanel = dx < -70 ? 1 : dx > 70 ? 0 : activePanelRef.current;
+      setActivePanel(nextPanel);
+    };
 
-    if (gestureLockRef.current !== 'h') return;
-    const blockedAtStart = activePanel === 0 && dx > 0;
-    const blockedAtEnd = activePanel === 1 && dx < 0;
-    const resistedDx = blockedAtStart || blockedAtEnd ? dx * 0.22 : dx;
-    trackRef.current.style.transform = `translateX(calc(-${activePanel * 100}% + ${resistedDx}px))`;
-  }, [activePanel, isDexEntry, sidePanel]);
-
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-
-    if (gestureLockRef.current !== 'h') return;
-    const dx = e.changedTouches[0].clientX - startXRef.current;
-    const nextPanel = dx < -70 ? 1 : dx > 70 ? 0 : activePanel;
-    setActivePanel(nextPanel);
-  }, [activePanel]);
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd, { passive: true });
+    el.addEventListener('touchcancel', onEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [setActivePanel]);
 
   const outlet = <Outlet context={{ activePanel, setActivePanel, setSidePanel } satisfies PokedexShellContext} />;
 
   return (
-    <div
-      className="pokedex-shell-viewport"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
+    <div className="pokedex-shell-viewport" ref={viewportRef}>
       <div ref={trackRef} className="pokedex-shell-track">
         <div className="pokedex-shell">
           {/* Header — styled like the actual Pokédex top panel */}
