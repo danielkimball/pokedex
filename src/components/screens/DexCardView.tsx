@@ -13,23 +13,13 @@ import { useAppStore } from '../../state/store';
 import { SPECIES } from '../../core/constants/species';
 import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { getAllPokemon } from '../../db/pokemon-store';
-import { monCardArt, monSpriteUrl, defaultSpriteUrl } from '../../core/constants/games';
 import type { PokemonRecord } from '../../db/schema';
-import { TypeBadge } from '../ui/TypeBadge';
+import { TcgCard } from '../ui/TcgCard';
 
 const GEN_RANGES: Record<number, [number, number]> = {
   1: [1, 151], 2: [152, 251], 3: [252, 386], 4: [387, 493],
 };
 const GEN_LABEL: Record<number, string> = { 1: 'GEN I', 2: 'GEN II', 3: 'GEN III', 4: 'GEN IV' };
-
-/** Lightened type colors for the card footer — mirrors the detail card. */
-const CARD_BG: Record<string, string> = {
-  Normal: '#D4D0AC', Fighting: '#D4A088', Flying: '#C8B8F0', Poison: '#C890C8',
-  Ground: '#E8D8A0', Rock: '#D4C488', Bug: '#C8D870', Ghost: '#B898C8',
-  Steel: '#D8D8E8', Fire: '#F0C0A0', Water: '#A8C8F0', Grass: '#B0D898',
-  Electric: '#F8E878', Psychic: '#F0A8B8', Ice: '#B8E0E0', Dragon: '#B098E8',
-  Dark: '#B0A898', '???': '#A8C8B8',
-};
 
 function typesFor(species: number): string[] {
   const pair = SPECIES_TYPES[species];
@@ -152,46 +142,27 @@ export function DexCardView() {
 }
 
 function CardCell({ stack, onClick }: { stack: Stack; onClick: () => void }) {
-  const { species, rep, maxLevel, count } = stack;
-  const name = SPECIES[species] || `#${species}`;
-  const types = typesFor(species);
-  const footerBg = CARD_BG[types[0]] || '#D4D0AC';
-  const art = monCardArt(rep);
+  const { rep, count } = stack;
   const stackLayers = Math.min(count - 1, 3); // up to 3 visible edges behind
 
   return (
     <div style={s.cellWrap} onClick={onClick}>
-      {/* Stacked-card edges behind the top card */}
+      {/* Stacked-card edges peeking out behind the real card */}
       {Array.from({ length: stackLayers }).map((_, i) => (
         <div
           key={i}
           style={{
             ...s.stackEdge,
-            transform: `translate(${(i + 1) * 3}px, ${(i + 1) * 3}px) rotate(${(i + 1) * 1.1}deg)`,
+            transform: `translate(${(i + 1) * 3}px, ${(i + 1) * 3}px) rotate(${(i + 1) * 1}deg)`,
             zIndex: 0,
-            opacity: 0.55 - i * 0.12,
+            opacity: 0.5 - i * 0.12,
           }}
         />
       ))}
 
-      {/* Top card */}
-      <div style={s.card}>
-        <div style={s.artWindow}>
-          {art ? (
-            <img src={art} alt={name} style={s.art} onError={(e) => { e.currentTarget.src = monSpriteUrl(rep); e.currentTarget.style.objectFit = 'contain'; }} />
-          ) : (
-            <img src={monSpriteUrl(rep)} alt={name} style={s.sprite} onError={(e) => { e.currentTarget.src = defaultSpriteUrl(species); }} />
-          )}
-        </div>
-        <div style={{ ...s.footer, background: footerBg }}>
-          <div style={s.footerTop}>
-            <span style={s.cellName}>{name}</span>
-            <span style={s.cellLevel}>Lv{maxLevel}</span>
-          </div>
-          <div style={s.cellTypes}>
-            {types.map(t => <TypeBadge key={t} type={t} />)}
-          </div>
-        </div>
+      {/* The actual TcgCard, scaled down to fit the grid cell via its container query */}
+      <div style={s.cardHolder}>
+        <TcgCard record={rep} />
       </div>
 
       {/* Count badge (notification-style) */}
@@ -249,80 +220,24 @@ const s = {
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-    gap: '12px 10px',
-    padding: '4px',
+    gap: '16px 10px',
+    padding: '4px 6px',
   },
   cellWrap: {
     position: 'relative' as const,
     cursor: 'pointer',
-    paddingBottom: '4px',
   },
   stackEdge: {
     position: 'absolute' as const,
     inset: 0,
-    background: '#fffaf0',
-    border: '2px solid #E8C64E',
-    borderRadius: '7px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+    background: '#fdf6e3',
+    border: '0.5px solid #c9a83a',
+    borderRadius: '5px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
   },
-  card: {
+  cardHolder: {
     position: 'relative' as const,
     zIndex: 1,
-    border: '2px solid #E8C64E',
-    borderRadius: '7px',
-    overflow: 'hidden' as const,
-    background: '#fffaf0',
-    boxShadow: '0 2px 5px rgba(0,0,0,0.28)',
-  },
-  artWindow: {
-    width: '100%',
-    aspectRatio: '142 / 104',
-    background: '#101013',
-    display: 'flex',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    overflow: 'hidden' as const,
-  },
-  art: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover' as const,
-    display: 'block' as const,
-  },
-  sprite: {
-    width: '70%',
-    height: '70%',
-    objectFit: 'contain' as const,
-    imageRendering: 'pixelated' as const,
-  },
-  footer: {
-    padding: '4px 5px 5px',
-  },
-  footerTop: {
-    display: 'flex',
-    alignItems: 'baseline' as const,
-    justifyContent: 'space-between' as const,
-    gap: '3px',
-  },
-  cellName: {
-    fontSize: '10px',
-    fontWeight: 'bold' as const,
-    color: '#1a1a1a',
-    whiteSpace: 'nowrap' as const,
-    overflow: 'hidden' as const,
-    textOverflow: 'ellipsis' as const,
-  },
-  cellLevel: {
-    fontSize: '9px',
-    fontWeight: 'bold' as const,
-    color: '#1a1a1a',
-    flexShrink: 0,
-  },
-  cellTypes: {
-    display: 'flex',
-    gap: '2px',
-    marginTop: '3px',
-    flexWrap: 'wrap' as const,
   },
   countBadge: {
     position: 'absolute' as const,
