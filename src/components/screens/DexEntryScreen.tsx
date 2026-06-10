@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAppStore } from '../../state/store';
 import { SPECIES } from '../../core/constants/species';
@@ -16,9 +16,61 @@ import { getGender } from '../../core/utils/gender';
 import { ORIGIN_GAMES } from '../../core/constants/origin-games';
 import { spriteUrl, defaultSpriteUrl, monSpriteUrl, monCardArt, gameLabel, genLabel } from '../../core/constants/games';
 import { gen4CatchView, gen4Tips, GEN4_GAME_LABEL } from '../../core/constants/gen4-dex-data';
+import { LEARNSETS_HGSS, type Gen4Learnset } from '../../core/constants/learnsets-gen4';
 import type { PokedexShellContext } from '../layout/PokedexShell';
 
 const ROMAN_PANEL = ['', 'I', 'II', 'III', 'IV'];
+
+/** veekun gen-4 machine numbers: 1-92 are TMs, 101-108 are HM01-08. */
+function machineLabel(n: number): string {
+  return n <= 92 ? `TM${String(n).padStart(2, '0')}` : `HM${String(n - 100).padStart(2, '0')}`;
+}
+
+/**
+ * Renders a species' HG/SS learnset. `full` adds TM/HM, egg and tutor moves;
+ * otherwise just the level-up sequence (used in the compact under-card block).
+ */
+function LearnsetBlock({ learnset, full }: { learnset: Gen4Learnset; full: boolean }) {
+  return (
+    <>
+      {full && <div style={lm.subhead}>Level-Up</div>}
+      <div style={lm.lvList}>
+        {learnset.levelup.map(([lv, mv], i) => (
+          <div key={`${lv}-${mv}-${i}`} style={lm.lvRow}>
+            <span style={lm.lv}>{lv === 0 ? 'Evo' : `Lv${lv}`}</span>
+            <span style={lm.mv}>{MOVES[mv] || `#${mv}`}</span>
+          </div>
+        ))}
+      </div>
+      {full && learnset.machine.length > 0 && (
+        <>
+          <div style={lm.subhead}>TM / HM</div>
+          <div style={lm.chips}>
+            {learnset.machine.map(([n, mv]) => (
+              <span key={n} style={lm.chip}><b style={lm.chipTag}>{machineLabel(n)}</b> {MOVES[mv] || `#${mv}`}</span>
+            ))}
+          </div>
+        </>
+      )}
+      {full && learnset.egg.length > 0 && (
+        <>
+          <div style={lm.subhead}>Egg Moves</div>
+          <div style={lm.chips}>
+            {learnset.egg.map(mv => <span key={mv} style={lm.chip}>{MOVES[mv] || `#${mv}`}</span>)}
+          </div>
+        </>
+      )}
+      {full && learnset.tutor.length > 0 && (
+        <>
+          <div style={lm.subhead}>Move Tutor</div>
+          <div style={lm.chips}>
+            {learnset.tutor.map(mv => <span key={mv} style={lm.chip}>{MOVES[mv] || `#${mv}`}</span>)}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
 
 // Species-level sprite (generation-neutral) for the dex identity + evolution chain.
 const SPRITE_URL = (n: number) => defaultSpriteUrl(n);
@@ -68,7 +120,6 @@ export function DexEntryScreen() {
   const saves = useAppStore(s => s.saves);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [evoOpen, setEvoOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(true);
   const [pokemonRecords, setPokemonRecords] = useState<PokemonRecord[]>([]);
   const [cardIndex, setCardIndex] = useState(0);
@@ -192,28 +243,15 @@ export function DexEntryScreen() {
   const evoInfo = EVOLUTIONS?.[dexNum];
   const chain: number[] = evoInfo?.chain ?? [dexNum];
   const evolvesTo: { species: number; method: string }[] | null = evoInfo?.evolvesTo ?? null;
-  const evoMethod: string | null = evoInfo?.method ?? null;
 
   // The copy currently shown in the carousel — drives the data panel's moveset.
   const selectedRecord = pokemonRecords[cardIndex] ?? pokemonRecords[0] ?? null;
 
   useEffect(() => {
-    const chainIdx = chain.indexOf(dexNum);
-    const evoFrom = chainIdx > 0 ? chain[chainIdx - 1] : null;
     const catchView = gen4CatchView(dexNum, panelGen);
     const tips = panelGen === 4 ? gen4Tips(dexNum) : [];
-
     const rec = selectedRecord;
-    const recMoves = rec ? rec.moves.filter(m => m !== 0).map(m => MOVES[m] || `Move #${m}`) : [];
-    const recNature = rec ? (NATURES[rec.nature] || null) : null;
-    const recAbility = rec && rec.ability ? (ABILITIES[rec.ability] || `Ability #${rec.ability}`) : null;
-    const recItem = rec && rec.heldItem ? getItemName(rec.heldItem) : null;
-    const recLoc = rec
-      ? rec.location === 'party'
-        ? `Party ${rec.slotIndex + 1}`
-        : `Box ${rec.containerIndex + 1}, slot ${rec.slotIndex + 1}`
-      : null;
-    const total = pokemonRecords.length;
+    const learnset = panelGen === 4 ? LEARNSETS_HGSS[dexNum] : undefined;
 
     setSidePanel(
       <div style={dp.panel}>
@@ -254,26 +292,6 @@ export function DexEntryScreen() {
           </div>
         </div>
 
-        {/* Evolution */}
-        <div style={dp.section}>
-          <div style={dp.sectionTitle}>Evolution</div>
-          {evoFrom && (
-            <div style={dp.evoLine} onClick={() => { navigate(`/dex/${evoFrom}`); scrollRef.current?.scrollTo(0, 0); }}>
-              <img src={SPRITE_URL(evoFrom)} alt="" style={dp.evoMini} />
-              <span>From <strong>{SPECIES[evoFrom]}</strong>{evoMethod ? ` · ${evoMethod}` : ''}</span>
-            </div>
-          )}
-          {evolvesTo && evolvesTo.length > 0 && evolvesTo.map(ev => (
-            <div key={ev.species} style={dp.evoLine} onClick={() => { navigate(`/dex/${ev.species}`); scrollRef.current?.scrollTo(0, 0); }}>
-              <img src={SPRITE_URL(ev.species)} alt="" style={dp.evoMini} />
-              <span>Into <strong>{SPECIES[ev.species]}</strong> · {ev.method}</span>
-            </div>
-          ))}
-          {!evoFrom && !(evolvesTo && evolvesTo.length > 0) && (
-            <div style={dp.muted}>Does not evolve.</div>
-          )}
-        </div>
-
         {/* Where to catch */}
         <div style={dp.section}>
           <div style={dp.sectionTitle}>Where to Catch · Gen {ROMAN_PANEL[panelGen]}</div>
@@ -311,25 +329,18 @@ export function DexEntryScreen() {
           )}
         </div>
 
-        {/* This copy's moveset + meta */}
-        {rec && (
+        {/* Full learnset — level-up sequence + TM/HM, egg and tutor moves */}
+        {learnset ? (
           <div style={dp.section}>
-            <div style={dp.sectionTitle}>Your {name}{total > 1 ? ` · ${cardIndex + 1}/${total}` : ''}</div>
-            <div style={dp.moveGrid}>
-              {[0, 1, 2, 3].map(i => (
-                <div key={i} style={recMoves[i] ? dp.moveCell : dp.moveCellEmpty}>{recMoves[i] || '—'}</div>
-              ))}
-            </div>
-            <div style={dp.recMeta}>
-              {recAbility && <span>{recAbility}</span>}
-              {recNature && <span>{recNature}</span>}
-              {recItem && <span>@ {recItem}</span>}
-            </div>
-            <div style={dp.recMetaDim}>
-              Lv {rec.level} · {recLoc}{rec.otName ? ` · OT ${rec.otName}` : ''}
-            </div>
+            <div style={dp.sectionTitle}>Moves · HG/SS</div>
+            <LearnsetBlock learnset={learnset} full />
           </div>
-        )}
+        ) : panelGen === 4 ? (
+          <div style={dp.section}>
+            <div style={dp.sectionTitle}>Moves · HG/SS</div>
+            <div style={dp.muted}>No HG/SS learnset on record for this species.</div>
+          </div>
+        ) : null}
 
         <div style={dp.swipeHint}>Swipe right to return</div>
       </div>
@@ -564,89 +575,66 @@ export function DexEntryScreen() {
           );
         })()}
 
-        {/* Evolution chain */}
-        {chain.length > 1 && (
+        {/* Level-up moves under the card */}
+        {LEARNSETS_HGSS[dexNum] && (
           <div style={s.section}>
-            <div
-              style={s.sectionToggle}
-              onClick={() => setEvoOpen(!evoOpen)}
-            >
-              <span style={s.sectionTitle}>EVOLUTION</span>
-              <span style={s.toggleArrow}>{evoOpen ? '\u25BC' : '\u25B6'}</span>
+            <span style={s.sectionTitle}>LEVEL-UP MOVES</span>
+            <div style={{ marginTop: '6px' }}>
+              <LearnsetBlock learnset={LEARNSETS_HGSS[dexNum]} full={false} />
             </div>
-            {evoOpen && <><div style={s.evoChain}>
-              {chain.map((speciesNum, idx) => {
-                const evoData = EVOLUTIONS?.[speciesNum];
-                const method = evoData?.method;
-                const isCurrentPokemon = speciesNum === dexNum;
-                const speciesName = SPECIES[speciesNum] || '???';
-                const speciesCaught = registryMap.get(speciesNum)?.caught ?? false;
-                return (
-                  <div key={speciesNum} style={s.evoStep}>
-                    {idx > 0 && method && (
-                      <div style={s.evoMethod}>{method}</div>
-                    )}
-                    {idx > 0 && !method && (
-                      <div style={s.evoArrow}>{'>>>'}</div>
-                    )}
-                    <div
-                      style={{
-                        ...s.evoCard,
-                        borderColor: isCurrentPokemon ? '#cc0000' : '#22222233',
-                        background: isCurrentPokemon ? 'rgba(204,0,0,0.08)' : 'transparent',
-                        cursor: isCurrentPokemon ? 'default' : 'pointer',
-                      }}
-                      onClick={() => {
-                        if (!isCurrentPokemon) {
-                          navigate(`/dex/${speciesNum}`);
-                          scrollRef.current?.scrollTo(0, 0);
-                        }
-                      }}
-                    >
-                      <img src={SPRITE_URL(speciesNum)} alt={speciesName} style={s.evoSprite} />
-                      <span style={{
-                        ...s.evoName,
-                        color: speciesCaught ? '#111111' : '#777777',
-                      }}>
-                        {speciesName}
-                      </span>
-                      <span style={s.evoDot}>{speciesCaught ? '\u25CF' : '\u25CB'}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {/* Branching evolutions (Eevee etc.) */}
-            {evolvesTo && evolvesTo.length > 1 && (
-              <div style={{ marginTop: '8px' }}>
-                <div style={{ fontSize: '10px', color: '#555555', marginBottom: '4px' }}>Evolves into:</div>
-                {evolvesTo.map(evo => {
-                  const evoName = SPECIES[evo.species] || '???';
-                  const evoCaught = registryMap.get(evo.species)?.caught ?? false;
-                  return (
-                    <div
-                      key={evo.species}
-                      style={s.branchRow}
-                      onClick={() => { navigate(`/dex/${evo.species}`); scrollRef.current?.scrollTo(0, 0); }}
-                    >
-                      <img src={SPRITE_URL(evo.species)} alt={evoName} style={s.branchSprite} />
-                      <span style={{ fontSize: '11px', color: evoCaught ? '#111111' : '#666666', flex: 1 }}>
-                        {evoName}
-                      </span>
-                      <span style={{ fontSize: '10px', color: '#777777' }}>{evo.method}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            </>}
           </div>
         )}
 
-        {/* Where-to-catch, evolution detail, pro-tips and moveset now live in the
-            right-hand DATA panel \u2014 swipe left (or tap MAIN \u25B8 there to return). */}
+        {/* Evolution \u2014 always-visible horizontal sprite chain with arrows */}
+        {(chain.length > 1 || (evolvesTo != null && evolvesTo.length > 1)) && (
+          <div style={s.section}>
+            <span style={s.sectionTitle}>EVOLUTION</span>
+            <div style={s.evoRow}>
+              {chain.map((sp, idx) => {
+                const isCur = sp === dexNum;
+                const method = idx > 0 ? EVOLUTIONS?.[chain[idx]]?.method : null;
+                return (
+                  <Fragment key={sp}>
+                    {idx > 0 && (
+                      <div style={s.evoArrowCol}>
+                        <span style={s.evoArrowGlyph}>{'\u2192'}</span>
+                        {method && <span style={s.evoArrowMethod}>{method}</span>}
+                      </div>
+                    )}
+                    <div
+                      style={{ ...s.evoNode, ...(isCur ? s.evoNodeCurrent : null) }}
+                      onClick={() => { if (!isCur) { navigate(`/dex/${sp}`); scrollRef.current?.scrollTo(0, 0); } }}
+                    >
+                      <img src={SPRITE_URL(sp)} alt={SPECIES[sp]} style={s.evoNodeSprite} />
+                      <span style={{ ...s.evoNodeName, color: isCur ? '#cc0000' : '#222', fontWeight: isCur ? 'bold' as const : 'normal' as const }}>
+                        {SPECIES[sp]}
+                      </span>
+                    </div>
+                  </Fragment>
+                );
+              })}
+            </div>
+            {/* Branching evolutions (Eevee, Tyrogue, Gloom, ...) */}
+            {evolvesTo != null && evolvesTo.length > 1 && (
+              <div style={s.evoBranchWrap}>
+                {evolvesTo.map(ev => (
+                  <div key={ev.species} style={s.evoBranchNode} onClick={() => { navigate(`/dex/${ev.species}`); scrollRef.current?.scrollTo(0, 0); }}>
+                    <span style={s.evoArrowGlyph}>{'\u2192'}</span>
+                    <img src={SPRITE_URL(ev.species)} alt={SPECIES[ev.species]} style={s.evoBranchSprite} />
+                    <div style={s.evoBranchText}>
+                      <span style={s.evoNodeName}>{SPECIES[ev.species]}</span>
+                      <span style={s.evoArrowMethod}>{ev.method}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Catch locations, pro-tips and the full learnset live in the right DATA panel. */}
         <div style={s.dataHint} onClick={() => setActivePanel(1)}>
-          Swipe left for catch locations, evolution &amp; data {'\u25B8'}
+          Swipe left for catch locations &amp; full move data {'\u25B8'}
         </div>
       </div>
     </div>
@@ -862,6 +850,147 @@ const s = {
     fontWeight: 'bold' as const,
     textAlign: 'center' as const,
     cursor: 'pointer',
+  },
+
+  /* ── Horizontal evolution chain ── */
+  evoRow: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    alignItems: 'flex-start' as const,
+    justifyContent: 'center' as const,
+    gap: '2px',
+    marginTop: '8px',
+  },
+  evoNode: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center' as const,
+    gap: '1px',
+    width: '64px',
+    padding: '3px 2px',
+    borderRadius: '6px',
+    border: '1px solid transparent',
+    cursor: 'pointer',
+  },
+  evoNodeCurrent: {
+    background: 'rgba(204,0,0,0.07)',
+    border: '1px solid #cc000044',
+  },
+  evoNodeSprite: {
+    width: '46px',
+    height: '46px',
+    imageRendering: 'pixelated' as const,
+  },
+  evoNodeName: {
+    fontSize: '9px',
+    textAlign: 'center' as const,
+    lineHeight: 1.1,
+    color: '#222',
+  },
+  evoArrowCol: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'flex-start' as const,
+    paddingTop: '14px',
+    width: '46px',
+    flexShrink: 0,
+  },
+  evoArrowGlyph: {
+    fontSize: '16px',
+    color: '#cc001c',
+    lineHeight: 1,
+  },
+  evoArrowMethod: {
+    fontSize: '7px',
+    color: '#6a5d4a',
+    textAlign: 'center' as const,
+    lineHeight: 1.1,
+    marginTop: '2px',
+  },
+  evoBranchWrap: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    justifyContent: 'center' as const,
+    gap: '6px',
+    marginTop: '8px',
+  },
+  evoBranchNode: {
+    display: 'flex',
+    alignItems: 'center' as const,
+    gap: '3px',
+    padding: '2px 6px 2px 2px',
+    border: '1px solid #22222218',
+    borderRadius: '6px',
+    background: 'rgba(255,255,255,0.5)',
+    cursor: 'pointer',
+  },
+  evoBranchSprite: {
+    width: '34px',
+    height: '34px',
+    imageRendering: 'pixelated' as const,
+    flexShrink: 0,
+  },
+  evoBranchText: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    minWidth: 0,
+  },
+} as const;
+
+/** Learnset block (shared by the under-card list and the right DATA panel). */
+const lm = {
+  subhead: {
+    fontSize: '9px',
+    fontWeight: 'bold' as const,
+    color: '#8f0014',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+    margin: '9px 0 4px',
+  },
+  lvList: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '2px',
+  },
+  lvRow: {
+    display: 'flex',
+    alignItems: 'baseline' as const,
+    gap: '8px',
+  },
+  lv: {
+    fontSize: '10px',
+    fontWeight: 'bold' as const,
+    color: '#cc001c',
+    minWidth: '34px',
+    flexShrink: 0,
+  },
+  mv: {
+    fontSize: '11px',
+    color: '#222',
+  },
+  chips: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: '4px',
+  },
+  chip: {
+    display: 'inline-flex',
+    alignItems: 'center' as const,
+    gap: '3px',
+    fontSize: '9.5px',
+    color: '#333',
+    background: 'rgba(0,0,0,0.05)',
+    borderRadius: '4px',
+    padding: '2px 6px',
+  },
+  chipTag: {
+    fontSize: '8px',
+    fontWeight: 'bold' as const,
+    color: '#8a6d00',
+    background: '#f6d54a',
+    borderRadius: '3px',
+    padding: '0 3px',
   },
 } as const;
 
