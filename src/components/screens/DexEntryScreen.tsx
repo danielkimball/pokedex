@@ -26,14 +26,11 @@ function machineLabel(n: number): string {
   return n <= 92 ? `TM${String(n).padStart(2, '0')}` : `HM${String(n - 100).padStart(2, '0')}`;
 }
 
-/**
- * Renders a species' HG/SS learnset. `full` adds TM/HM, egg and tutor moves;
- * otherwise just the level-up sequence (used in the compact under-card block).
- */
-function LearnsetBlock({ learnset, full }: { learnset: Gen4Learnset; full: boolean }) {
+/** Renders a species' HG/SS learnset (level-up + TM/HM, egg, tutor) for the DATA panel. */
+function LearnsetBlock({ learnset }: { learnset: Gen4Learnset }) {
   return (
     <>
-      {full && <div style={lm.subhead}>Level-Up</div>}
+      <div style={lm.subhead}>Level-Up</div>
       <div style={lm.lvList}>
         {learnset.levelup.map(([lv, mv], i) => (
           <div key={`${lv}-${mv}-${i}`} style={lm.lvRow}>
@@ -42,7 +39,7 @@ function LearnsetBlock({ learnset, full }: { learnset: Gen4Learnset; full: boole
           </div>
         ))}
       </div>
-      {full && learnset.machine.length > 0 && (
+      {learnset.machine.length > 0 && (
         <>
           <div style={lm.subhead}>TM / HM</div>
           <div style={lm.chips}>
@@ -52,7 +49,7 @@ function LearnsetBlock({ learnset, full }: { learnset: Gen4Learnset; full: boole
           </div>
         </>
       )}
-      {full && learnset.egg.length > 0 && (
+      {learnset.egg.length > 0 && (
         <>
           <div style={lm.subhead}>Egg Moves</div>
           <div style={lm.chips}>
@@ -60,7 +57,7 @@ function LearnsetBlock({ learnset, full }: { learnset: Gen4Learnset; full: boole
           </div>
         </>
       )}
-      {full && learnset.tutor.length > 0 && (
+      {learnset.tutor.length > 0 && (
         <>
           <div style={lm.subhead}>Move Tutor</div>
           <div style={lm.chips}>
@@ -333,7 +330,7 @@ export function DexEntryScreen() {
         {learnset ? (
           <div style={dp.section}>
             <div style={dp.sectionTitle}>Moves · HG/SS</div>
-            <LearnsetBlock learnset={learnset} full />
+            <LearnsetBlock learnset={learnset} />
           </div>
         ) : panelGen === 4 ? (
           <div style={dp.section}>
@@ -576,16 +573,6 @@ export function DexEntryScreen() {
             </div>
           );
         })()}
-
-        {/* Level-up moves under the card */}
-        {LEARNSETS_HGSS[dexNum] && (
-          <div style={s.section}>
-            <span style={s.sectionTitle}>LEVEL-UP MOVES</span>
-            <div style={{ marginTop: '6px' }}>
-              <LearnsetBlock learnset={LEARNSETS_HGSS[dexNum]} full={false} />
-            </div>
-          </div>
-        )}
 
         {/* Evolution \u2014 always-visible horizontal sprite chain with arrows */}
         {(chain.length > 1 || (evolvesTo != null && evolvesTo.length > 1)) && (
@@ -940,7 +927,7 @@ const s = {
   },
 } as const;
 
-/** Learnset block (shared by the under-card list and the right DATA panel). */
+/** Learnset block styles (DATA panel). */
 const lm = {
   subhead: {
     fontSize: '9px',
