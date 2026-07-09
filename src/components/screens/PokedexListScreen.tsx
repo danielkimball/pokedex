@@ -10,8 +10,8 @@ import { gameLabel, defaultSpriteUrl } from '../../core/constants/games';
 import { ownedSpeciesFromSave } from '../../utils/owned-species';
 import { TypeBadge } from '../ui/TypeBadge';
 import { DexCardView } from './DexCardView';
-import { YellowProgressionView } from '../pokedex/YellowProgressionView';
-import { HeartGoldProgressionView } from '../pokedex/HeartGoldProgressionView';
+import { GameProgressionView } from '../pokedex/GameProgressionView';
+import { PROGRESSION_GAME_OPTIONS, getGuide } from '../../core/constants/progression-registry';
 
 const SPRITE_URL = (n: number) => defaultSpriteUrl(n);
 
@@ -57,12 +57,6 @@ const VERSION_OPTIONS: { value: DexVersion; label: string }[] = [
   { value: 'diamond', label: 'Diamond Only' },
   { value: 'pearl', label: 'Pearl Only' },
   { value: 'platinum', label: 'Platinum Only' },
-];
-
-const PROGRESSION_OPTIONS: { value: DexProgression; label: string }[] = [
-  { value: null, label: 'Off (National Dex)' },
-  { value: 'yellow', label: 'Yellow — story order' },
-  { value: 'heartgold', label: 'HeartGold — story order' },
 ];
 
 /** Returns true if locs represent a real catchable location (not just Trade/Event/empty) */
@@ -270,11 +264,20 @@ export function PokedexListScreen() {
   const focusedSave = (dexSaveId ? saves.find(s => s.id === dexSaveId) : null) ?? null;
 
   const activeFilterCount = [
+    dexProgression != null,
     dexShow !== 'all',
     dexVersion !== 'all',
     dexGen !== null,
     dexSort !== 'number',
   ].filter(Boolean).length;
+
+  // Migrate legacy progression keys from older sessions
+  const guideId = useMemo(() => {
+    if (!dexProgression) return null;
+    if (dexProgression === 'yellow') return 'Yellow';
+    if (dexProgression === 'heartgold') return 'HeartGold';
+    return getGuide(dexProgression) ? dexProgression : null;
+  }, [dexProgression]);
 
   return (
     <div style={s.container}>
@@ -302,64 +305,84 @@ export function PokedexListScreen() {
         </div>
       </div>
 
-      {/* Compact filter bar: search + path + save always visible */}
-      <div style={s.compactBar}>
+      {/* Always visible: full-width search + save focus */}
+      <div style={s.topFilters}>
         <input
           type="text"
           placeholder="Search name or #..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={s.searchInputCompact}
+          style={s.searchFull}
+          aria-label="Search Pokémon by name or number"
         />
-        <select
-          value={dexProgression ?? ''}
-          onChange={(e) => {
-            const v = e.target.value;
-            const next = (v === '' ? null : v) as DexProgression;
-            setDexProgression(next);
-            if (next === 'yellow') setDexGen(1);
-            if (next === 'heartgold') setDexGen(null);
-          }}
-          style={s.selectCompact}
-          title="Story path mode"
-        >
-          {PROGRESSION_OPTIONS.map(opt => (
-            <option key={String(opt.value)} value={opt.value ?? ''}>
-              {opt.value === null ? 'National Dex' : opt.label.replace(' — story order', '')}
-            </option>
-          ))}
-        </select>
-        <select
-          value={dexSaveId ?? ''}
-          onChange={(e) => setDexSaveId(e.target.value || null)}
-          style={s.selectCompact}
-          title="Save focus"
-        >
-          <option value="">All saves</option>
-          {saves.map(sv => (
-            <option key={sv.id} value={sv.id}>{gameLabel(sv)} · {sv.trainerName}</option>
-          ))}
-        </select>
+        <div style={s.saveRow}>
+          <label style={s.fieldLabel} htmlFor="dex-save-filter">Save</label>
+          <select
+            id="dex-save-filter"
+            value={dexSaveId ?? ''}
+            onChange={(e) => setDexSaveId(e.target.value || null)}
+            style={s.saveSelect}
+            title="Only count Pokémon from this imported save as caught"
+          >
+            <option value="">All saves (any game)</option>
+            {saves.map(sv => (
+              <option key={sv.id} value={sv.id}>
+                {gameLabel(sv)} — {sv.trainerName}
+              </option>
+            ))}
+          </select>
+        </div>
         <button
           type="button"
-          style={filtersOpen || activeFilterCount > 0 ? s.moreBtnActive : s.moreBtn}
+          style={s.moreToggle}
           onClick={() => setFiltersOpen(o => !o)}
-          title="Sort, show, gen, version"
+          aria-expanded={filtersOpen}
         >
-          {filtersOpen ? 'Less' : activeFilterCount > 0 ? `More (${activeFilterCount})` : 'More'}
+          {filtersOpen ? (
+            <>Less <span style={s.chevron}>{'^'}</span></>
+          ) : (
+            <>More{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''} <span style={s.chevron}>{'v'}</span></>
+          )}
         </button>
       </div>
 
-      {/* Secondary filters — collapsed by default to free vertical space */}
+      {/* Collapsible filters — clear labels */}
       {filtersOpen && (
         <div style={s.morePanel}>
           <div style={s.moreRow}>
-            <span style={s.moreLabel}>Sort</span>
+            <label style={s.fieldLabel} htmlFor="dex-path-filter">Story path</label>
+            <select
+              id="dex-path-filter"
+              value={guideId ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                const next = (v === '' ? null : v) as DexProgression;
+                setDexProgression(next);
+                const g = getGuide(next);
+                if (g?.generation === 1) setDexGen(1);
+                else if (g?.generation === 2) setDexGen(2);
+                else if (g?.generation === 3) setDexGen(3);
+                else if (next === null) { /* keep gen */ }
+                else setDexGen(null);
+              }}
+              style={s.selectInPanel}
+              title="Group the list by in-game story order for a specific cartridge"
+            >
+              {PROGRESSION_GAME_OPTIONS.map(opt => (
+                <option key={String(opt.id)} value={opt.id ?? ''}>
+                  {opt.group ? `${opt.group}: ${opt.label}` : opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={s.moreRow}>
+            <span style={s.fieldLabel}>Sort by</span>
             {SORT_OPTIONS.map(opt => (
               <button
                 key={opt.value}
                 style={dexSort === opt.value ? s.chipActive : s.chip}
                 onClick={() => setDexSort(opt.value)}
+                title={opt.value === 'number' ? 'National Dex number' : opt.value === 'name' ? 'Alphabetical' : 'Level'}
               >
                 {opt.label}
               </button>
@@ -367,23 +390,26 @@ export function PokedexListScreen() {
             <button
               style={(dexSort === 'level-desc' || dexSort === 'level-asc') ? s.chipActive : s.chip}
               onClick={handleLevelSort}
+              title="Sort by highest level owned"
             >
-              Lv{dexSort === 'level-asc' ? '\u25B2' : '\u25BC'}
+              Level{dexSort === 'level-asc' ? ' ^' : ' v'}
             </button>
             {dexView === 'card' && (
               <button
                 style={dexSort === 'type' ? s.chipActive : s.chip}
                 onClick={() => setDexSort('type')}
+                title="Sort by type"
               >
                 Type
               </button>
             )}
           </div>
           <div style={s.moreRow}>
-            <span style={s.moreLabel}>Show</span>
+            <span style={s.fieldLabel}>Caught</span>
             <button
               style={dexShow === 'all' ? s.chipActive : s.chip}
               onClick={() => setDexShow('all')}
+              title="Show every species"
             >
               All
             </button>
@@ -392,29 +418,33 @@ export function PokedexListScreen() {
                 key={opt.value}
                 style={dexShow === opt.value ? s.chipActive : s.chip}
                 onClick={() => handleShowToggle(opt.value)}
+                title={opt.value === 'caught' ? 'Only species you own' : 'Only species you are missing'}
               >
                 {opt.label}
               </button>
             ))}
           </div>
           <div style={s.moreRow}>
-            <span style={s.moreLabel}>Gen</span>
+            <span style={s.fieldLabel}>Generation</span>
             {GEN_OPTIONS.map(opt => (
               <button
                 key={String(opt.value)}
                 style={dexGen === opt.value ? s.chipActive : s.chip}
                 onClick={() => setDexGen(opt.value)}
+                title={opt.value == null ? 'All generations' : `Generation ${opt.label} only`}
               >
                 {opt.label}
               </button>
             ))}
           </div>
           <div style={s.moreRow}>
-            <span style={s.moreLabel}>Excl.</span>
+            <label style={s.fieldLabel} htmlFor="dex-excl-filter">Version exclusive</label>
             <select
+              id="dex-excl-filter"
               value={dexVersion}
               onChange={(e) => setDexVersion(e.target.value as DexVersion)}
               style={s.selectInPanel}
+              title="Show only version-exclusive species (Gen 4)"
             >
               {VERSION_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -424,16 +454,9 @@ export function PokedexListScreen() {
         </div>
       )}
 
-      {dexProgression === 'yellow' ? (
-        <YellowProgressionView
-          caughtSet={caughtSet}
-          focusedSave={focusedSave}
-          saves={saves}
-          searchQuery={searchQuery}
-          show={dexShow}
-        />
-      ) : dexProgression === 'heartgold' ? (
-        <HeartGoldProgressionView
+      {guideId ? (
+        <GameProgressionView
+          guideId={guideId}
           caughtSet={caughtSet}
           focusedSave={focusedSave}
           saves={saves}
@@ -570,100 +593,93 @@ const s = {
     fontWeight: 'bold' as const,
     cursor: 'pointer',
   },
-  compactBar: {
+  topFilters: {
     display: 'flex',
-    alignItems: 'center' as const,
+    flexDirection: 'column' as const,
     gap: '4px',
-    padding: '4px 8px',
+    padding: '6px 10px 4px',
     flexShrink: 0,
     borderBottom: '1px solid #11111115',
-    flexWrap: 'wrap' as const,
   },
-  searchInputCompact: {
-    flex: '1 1 120px',
-    minWidth: '100px',
-    padding: '5px 8px',
+  searchFull: {
+    width: '100%',
+    padding: '7px 10px',
     background: '#fffaf0',
     border: '1px solid #11111144',
     borderRadius: '4px',
     color: '#111111',
-    fontSize: '11px',
+    fontSize: '12px',
     fontFamily: 'inherit',
     outline: 'none',
     boxSizing: 'border-box' as const,
   },
-  selectCompact: {
-    flex: '0 1 auto',
-    maxWidth: '130px',
-    padding: '4px 4px',
+  saveRow: {
+    display: 'flex',
+    alignItems: 'center' as const,
+    gap: '6px',
+  },
+  fieldLabel: {
+    fontSize: '10px',
+    color: '#5d5142',
+    fontWeight: 'bold' as const,
+    flexShrink: 0,
+    minWidth: '72px',
+  },
+  saveSelect: {
+    flex: 1,
+    padding: '4px 6px',
     background: '#fffaf0',
     border: '1px solid #11111133',
     borderRadius: '6px',
     color: '#5d5142',
-    fontSize: '10px',
+    fontSize: '11px',
     fontFamily: 'inherit',
     outline: 'none',
     cursor: 'pointer',
+    minWidth: 0,
   },
-  moreBtn: {
-    flex: '0 0 auto',
-    padding: '4px 8px',
-    border: '1px solid #11111133',
-    borderRadius: '6px',
+  moreToggle: {
+    alignSelf: 'flex-start',
+    padding: '0 2px',
+    border: 'none',
     background: 'transparent',
     color: '#5d5142',
     fontSize: '10px',
     fontFamily: 'inherit',
     cursor: 'pointer',
-    whiteSpace: 'nowrap' as const,
+    opacity: 0.85,
   },
-  moreBtnActive: {
-    flex: '0 0 auto',
-    padding: '4px 8px',
-    border: '1px solid #111111',
-    borderRadius: '6px',
-    background: 'rgba(204,0,28,0.10)',
-    color: '#111',
-    fontSize: '10px',
-    fontFamily: 'inherit',
-    fontWeight: 'bold' as const,
-    cursor: 'pointer',
-    whiteSpace: 'nowrap' as const,
+  chevron: {
+    fontSize: '9px',
+    opacity: 0.7,
   },
   morePanel: {
-    padding: '4px 8px 6px',
+    padding: '4px 10px 8px',
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: '3px',
+    gap: '5px',
     flexShrink: 0,
     borderBottom: '1px solid #11111115',
-    background: 'rgba(0,0,0,0.02)',
+    background: 'rgba(0,0,0,0.025)',
   },
   moreRow: {
     display: 'flex',
     alignItems: 'center' as const,
-    gap: '3px',
+    gap: '4px',
     flexWrap: 'wrap' as const,
   },
-  moreLabel: {
-    fontSize: '9px',
-    color: '#5d5142',
-    width: '28px',
-    flexShrink: 0,
-    fontWeight: 'bold' as const,
-  },
   selectInPanel: {
-    padding: '2px 4px',
+    padding: '3px 6px',
     background: '#fffaf0',
     border: '1px solid #11111133',
     borderRadius: '6px',
     color: '#5d5142',
-    fontSize: '10px',
+    fontSize: '11px',
     fontFamily: 'inherit',
     outline: 'none',
     cursor: 'pointer',
     flex: 1,
-    minWidth: '120px',
+    minWidth: '140px',
   },
   chip: {
     padding: '2px 7px',
