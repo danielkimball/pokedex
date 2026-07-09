@@ -29,6 +29,7 @@ import {
   type PlayerProgress,
 } from '../../core/constants/progression-heartgold';
 import type { SaveRecord } from '../../db/schema';
+import { readGen4BadgesFromSave } from '../../core/parser/trainer-reader';
 
 const SPRITE_URL = (n: number) => defaultSpriteUrl(n);
 
@@ -65,19 +66,36 @@ function resolveProgress(focused: SaveRecord | null, saves: SaveRecord[]): {
   source: SaveRecord | null;
 } {
   const hgSaves = saves.filter(
-    s => s.game === 'HeartGold' || (s.generation === 4 && /heart\s*gold|heartgold/i.test(s.filename)),
+    s =>
+      s.game === 'HeartGold' ||
+      s.game === 'SoulSilver' ||
+      s.gameVersion === 'HGSS' ||
+      (s.generation === 4 && /heart\s*gold|soul\s*silver|heartgold|soulsilver|hgss/i.test(s.filename)),
   );
   const pick =
-    focused && focused.game === 'HeartGold'
+    focused && (
+      focused.game === 'HeartGold' ||
+      focused.game === 'SoulSilver' ||
+      focused.gameVersion === 'HGSS' ||
+      focused.generation === 4
+    )
       ? focused
-      : focused && (focused.game === 'SoulSilver' || focused.generation === 4)
-        ? focused
-        : hgSaves[0] ?? null;
+      : hgSaves[0] ?? null;
 
   if (!pick) {
     return { progress: { badges: 0, tools: mergeTools(0, []) }, source: null };
   }
-  const badges = typeof pick.badges === 'number' ? pick.badges : 0;
+
+  // Always re-parse badges from raw when possible — older imports used the wrong
+  // HGSS offset (u16@0x82) and stored Johto/Kanto swapped or zeroed.
+  let badges = typeof pick.badges === 'number' ? pick.badges : 0;
+  if (pick.rawData) {
+    try {
+      const version = pick.gameVersion === 'Pt' || pick.gameVersion === 'DP' ? pick.gameVersion : 'HGSS';
+      badges = readGen4BadgesFromSave(pick.rawData, version as 'HGSS' | 'DP' | 'Pt');
+    } catch { /* keep stored */ }
+  }
+
   return { progress: { badges, tools: mergeTools(badges, []) }, source: pick };
 }
 
@@ -95,7 +113,10 @@ function matchesQuery(species: number, query: string) {
   return name.includes(q) || num.includes(q) || String(species) === q;
 }
 
-/** Progressive: firstHere + currently obtainable. All spots: every encounter at the location. */
+/**
+ * Progressive: firstHere + currently obtainable (no path dupes).
+ * All spots: EVERY mon listed for that stop — same species can appear again later.
+ */
 function encountersForMode(
   area: ProgressionArea,
   mode: SpotMode,
@@ -111,8 +132,10 @@ function encountersForMode(
       if (!e.firstHere) return false;
       if (!encounterAvailable(area, e, progress)) return false;
     } else {
-      // All spots: hide pure trade/event meta noise except their own sections
-      if (e.method === 'unavailable') return area.id === 'event';
+      // All spots: full location lists (including dupes across the path).
+      if (e.method === 'unavailable' && area.id !== 'event') return false;
+      if (e.method === 'trade' && area.id !== 'trade') return false;
+      if (e.method === 'evolve' && area.id !== 'evolutions') return false;
     }
     return true;
   });

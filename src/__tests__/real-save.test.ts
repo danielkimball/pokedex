@@ -34,9 +34,20 @@ describe.skipIf(!HAS_SAVE)('Real HGSS save file', () => {
       .map(p => SPECIES[p!.species]);
     console.log('Party:', names.join(', '));
 
-    expect(names).toContain('Heracross');
-    expect(names).toContain('Crobat');
+    // Party changes over time — assert a stable long-term mon when present.
+    expect(names.length).toBeGreaterThan(0);
     expect(names).toContain('Typhlosion');
+  });
+
+  it('reads all 16 gym badges', () => {
+    // Johto low byte, Kanto high byte
+    expect(save!.trainer.badges & 0xff).toBe(0xff);
+    expect((save!.trainer.badges >> 8) & 0xff).toBe(0xff);
+  });
+
+  it('includes Day Care Ditto as caught', () => {
+    expect(save!.uniqueSpecies.has(132)).toBe(true);
+    expect(save!.allPokemon.some(l => l.location === 'daycare' && l.pokemon.species === 132)).toBe(true);
   });
 
   it('party Pokemon have valid levels', () => {

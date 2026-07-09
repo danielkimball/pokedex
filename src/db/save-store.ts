@@ -113,7 +113,11 @@ export async function refreshSaveAfterModification(saveId: string, newRawData: A
 
   const registryEntries = parsed.allPokemon.map(loc => ({
     species: loc.pokemon.species,
-    location: loc.location === 'party' ? `Party slot ${loc.slotIndex + 1}` : `Box ${loc.containerIndex + 1}`,
+    location: loc.location === 'party'
+      ? `Party slot ${loc.slotIndex + 1}`
+      : loc.location === 'daycare'
+        ? `Day Care slot ${loc.slotIndex + 1}`
+        : `Box ${loc.containerIndex + 1}`,
   }));
   await updateRegistryFromSave(registryEntries, saveId);
 

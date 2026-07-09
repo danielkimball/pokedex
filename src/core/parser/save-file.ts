@@ -8,6 +8,7 @@ import { readGeneralBlock, readStorageBlock } from './block-reader';
 import { parseTrainerInfo, type TrainerInfo } from './trainer-reader';
 import { readParty, type PartyData } from './party-reader';
 import { readPC, type BoxData } from './pc-reader';
+import { readDaycare, type DaycareData } from './daycare-reader';
 import type { Pokemon } from './pokemon-parser';
 
 export interface ParsedSave {
@@ -19,6 +20,8 @@ export interface ParsedSave {
   party: PartyData;
   /** PC boxes (18 boxes × 30 slots) */
   boxes: BoxData[];
+  /** Day Care (up to 2) */
+  daycare: DaycareData;
   /** All non-null Pokemon found in the save */
   allPokemon: PokemonLocation[];
   /** Total Pokemon count */
@@ -29,10 +32,10 @@ export interface ParsedSave {
 
 export interface PokemonLocation {
   pokemon: Pokemon;
-  location: 'party' | 'box';
-  /** Party slot (0-5) or box index (0-17) */
+  location: 'party' | 'box' | 'daycare';
+  /** Party slot (0-5), box index (0-17), or daycare slot (0-1) */
   containerIndex: number;
-  /** Slot within box (0-29) or party (0-5) */
+  /** Slot within box (0-29) or party/daycare (0-5 / 0-1) */
   slotIndex: number;
 }
 
@@ -63,6 +66,9 @@ export function parseSaveFile(buffer: ArrayBuffer): ParsedSave {
 
   // Parse PC boxes
   const boxes = readPC(storageResult.data, version);
+
+  // Parse Day Care (Ditto etc. live here — must count as caught)
+  const daycare = readDaycare(generalResult.data, version);
 
   // Collect all Pokemon with their locations
   const allPokemon: PokemonLocation[] = [];
@@ -98,11 +104,26 @@ export function parseSaveFile(buffer: ArrayBuffer): ParsedSave {
     }
   }
 
+  // Add Day Care Pokemon
+  for (let i = 0; i < daycare.pokemon.length; i++) {
+    const p = daycare.pokemon[i];
+    if (p) {
+      allPokemon.push({
+        pokemon: p,
+        location: 'daycare',
+        containerIndex: 0,
+        slotIndex: i,
+      });
+      uniqueSpecies.add(p.species);
+    }
+  }
+
   return {
     version,
     trainer,
     party,
     boxes,
+    daycare,
     allPokemon,
     totalPokemon: allPokemon.length,
     uniqueSpecies,

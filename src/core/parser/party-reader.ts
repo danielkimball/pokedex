@@ -17,8 +17,9 @@ interface PartyOffsets {
 const PARTY_OFFSETS: Record<GameVersion, PartyOffsets> = {
   DP: { count: 0x9C, data: 0xA0 },
   Pt: { count: 0xA0, data: 0xA4 },
-  HGSS: { count: 0x90, data: 0x98 },
-};
+  // PKHeX: Party @ 0x98, count @ Party - 4 = 0x94
+  HGSS: { count: 0x94, data: 0x98 },
+}
 
 export interface PartyData {
   count: number;

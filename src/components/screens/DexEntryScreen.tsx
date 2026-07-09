@@ -456,7 +456,9 @@ export function DexEntryScreen() {
                     const saveName = saveNameMap.get(record.saveId) || 'Unknown Save';
                     const loc = record.location === 'party'
                       ? `Party slot ${record.slotIndex + 1}`
-                      : `Box ${record.containerIndex + 1}, slot ${record.slotIndex + 1}`;
+                      : record.location === 'daycare'
+                        ? `Day Care slot ${record.slotIndex + 1}`
+                        : `Box ${record.containerIndex + 1}, slot ${record.slotIndex + 1}`;
                     const gender = getGender(record.species, record.pid);
                     const originGame = record.originGame != null ? ORIGIN_GAMES[record.originGame] : null;
                     const tcgArt = monCardArt(record);

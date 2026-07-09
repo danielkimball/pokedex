@@ -192,7 +192,9 @@ export async function importSaveBuffer(buffer: ArrayBuffer, filename: string): P
       species: loc.pokemon.species,
       location: loc.location === 'party'
         ? `Party slot ${loc.slotIndex + 1}`
-        : `Box ${loc.containerIndex + 1}`,
+        : loc.location === 'daycare'
+          ? `Day Care slot ${loc.slotIndex + 1}`
+          : `Box ${loc.containerIndex + 1}`,
     }));
     await updateRegistryFromSave(registryEntries, saveId);
 

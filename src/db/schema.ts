@@ -46,7 +46,7 @@ export interface PokemonRecord {
   otName: string;
   isShiny: boolean;
   isEgg: boolean;
-  location: 'party' | 'box';
+  location: 'party' | 'box' | 'daycare';
   containerIndex: number;
   slotIndex: number;
   nature: number;

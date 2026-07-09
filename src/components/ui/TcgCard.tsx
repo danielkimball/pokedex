@@ -214,7 +214,9 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
   const dex3 = String(record.species).padStart(3, '0');
   const location = record.location === 'party'
     ? 'In Party'
-    : `Box ${record.containerIndex + 1}, Slot ${record.slotIndex + 1}`;
+    : record.location === 'daycare'
+      ? 'Day Care'
+      : `Box ${record.containerIndex + 1}, Slot ${record.slotIndex + 1}`;
   const natureName = showNature ? (NATURES[record.nature] ?? null) : null;
   const abilityName = showAbility ? (ABILITIES[record.ability] ?? null) : null;
   const heldItemName = showHeldItem ? getItemName(record.heldItem) : null;

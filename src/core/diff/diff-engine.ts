@@ -10,6 +10,9 @@ function locationString(loc: PokemonLocation): string {
   if (loc.location === 'party') {
     return `Party slot ${loc.slotIndex + 1}`;
   }
+  if (loc.location === 'daycare') {
+    return `Day Care slot ${loc.slotIndex + 1}`;
+  }
   return `Box ${loc.containerIndex + 1}, Slot ${loc.slotIndex + 1}`;
 }
 
