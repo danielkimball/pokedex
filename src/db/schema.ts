@@ -21,6 +21,12 @@ export interface SaveRecord {
   trainerName: string;
   trainerId: number;
   secretId: number;
+  /**
+   * Gym badge bitfield when known.
+   * Gen 1 (R/B/Y): bit 0 = Boulder … bit 7 = Earth.
+   * Gen 4: from trainer block (Johto/Kanto badges packed).
+   */
+  badges?: number;
   importDate: number; // timestamp
   totalPokemon: number;
   uniqueSpecies: number;

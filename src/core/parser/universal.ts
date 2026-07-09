@@ -55,6 +55,8 @@ export interface UniversalSave {
     name: string;
     trainerId: number;
     secretId: number;
+    /** Gym badge bitfield when the generation stores one (Gen 1: bit0=Boulder…bit7=Earth). */
+    badges?: number;
   };
   mons: UniversalMon[];
 }

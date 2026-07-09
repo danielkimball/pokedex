@@ -1,7 +1,7 @@
 import { useRef, useMemo, useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useAppStore, type DexSort, type DexShow, type DexVersion, type DexView } from '../../state/store';
+import { useAppStore, type DexSort, type DexShow, type DexVersion, type DexView, type DexProgression } from '../../state/store';
 import { SPECIES } from '../../core/constants/species';
 import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { LOCATIONS } from '../../core/constants/locations';
@@ -9,6 +9,7 @@ import { getAllPokemon } from '../../db/pokemon-store';
 import { gameLabel, defaultSpriteUrl } from '../../core/constants/games';
 import { TypeBadge } from '../ui/TypeBadge';
 import { DexCardView } from './DexCardView';
+import { YellowProgressionView } from '../pokedex/YellowProgressionView';
 
 const SPRITE_URL = (n: number) => defaultSpriteUrl(n);
 
@@ -54,6 +55,11 @@ const VERSION_OPTIONS: { value: DexVersion; label: string }[] = [
   { value: 'diamond', label: 'Diamond Only' },
   { value: 'pearl', label: 'Pearl Only' },
   { value: 'platinum', label: 'Platinum Only' },
+];
+
+const PROGRESSION_OPTIONS: { value: DexProgression; label: string }[] = [
+  { value: null, label: 'Off (National Dex)' },
+  { value: 'yellow', label: 'Yellow — story order' },
 ];
 
 /** Returns true if locs represent a real catchable location (not just Trade/Event/empty) */
@@ -102,6 +108,8 @@ export function PokedexListScreen() {
   const setDexGen = useAppStore(s => s.setDexGen);
   const dexSaveId = useAppStore(s => s.dexSaveId);
   const setDexSaveId = useAppStore(s => s.setDexSaveId);
+  const dexProgression = useAppStore(s => s.dexProgression);
+  const setDexProgression = useAppStore(s => s.setDexProgression);
   const dexView = useAppStore(s => s.dexView);
   const setDexView = useAppStore(s => s.setDexView);
   const saves = useAppStore(s => s.saves);
@@ -242,7 +250,7 @@ export function PokedexListScreen() {
   let caughtInView = 0;
   for (const sp of caughtSet) if (sp >= genLo && sp <= genHi) caughtInView++;
 
-  const focusedSave = dexSaveId ? saves.find(s => s.id === dexSaveId) : null;
+  const focusedSave = (dexSaveId ? saves.find(s => s.id === dexSaveId) : null) ?? null;
 
   return (
     <div style={s.container}>
@@ -352,9 +360,35 @@ export function PokedexListScreen() {
             ))}
           </select>
         </div>
+        <div style={s.controlGroup}>
+          <span style={s.controlLabel}>Game:</span>
+          <select
+            value={dexProgression ?? ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              const next = (v === '' ? null : v) as DexProgression;
+              setDexProgression(next);
+              // Story-order views are Gen-scoped; pin Gen I for Yellow.
+              if (next === 'yellow') setDexGen(1);
+            }}
+            style={s.progressionSelect}
+          >
+            {PROGRESSION_OPTIONS.map(opt => (
+              <option key={String(opt.value)} value={opt.value ?? ''}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {dexView === 'card' ? (
+      {dexProgression === 'yellow' ? (
+        <YellowProgressionView
+          caughtSet={caughtSet}
+          focusedSave={focusedSave}
+          saves={saves}
+          searchQuery={searchQuery}
+          show={dexShow}
+        />
+      ) : dexView === 'card' ? (
         <DexCardView />
       ) : (
         <>
@@ -550,6 +584,19 @@ const s = {
     outline: 'none',
     cursor: 'pointer',
     marginLeft: 'auto',
+  },
+  progressionSelect: {
+    padding: '2px 4px',
+    background: '#fffaf0',
+    border: '1px solid #11111133',
+    borderRadius: '10px',
+    color: '#5d5142',
+    fontSize: '10px',
+    fontFamily: "inherit",
+    outline: 'none',
+    cursor: 'pointer',
+    flex: 1,
+    minWidth: '140px',
   },
   resultCount: {
     padding: '2px 10px 4px',

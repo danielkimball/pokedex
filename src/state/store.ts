@@ -34,6 +34,8 @@ export interface AppState {
   dexView: DexView;           // list (rows) vs card (3-col TCG grid)
   dexGen: number | null;      // National Dex generation slice (1-4), null = all
   dexSaveId: string | null;   // focus on a single imported save, null = all
+  /** Story-order catch guide by game. null = flat National Dex list. */
+  dexProgression: DexProgression;
 
   // Directory sync state
   syncSupported: boolean;
@@ -57,6 +59,7 @@ export interface AppState {
   setDexView: (view: DexView) => void;
   setDexGen: (gen: number | null) => void;
   setDexSaveId: (id: string | null) => void;
+  setDexProgression: (progression: DexProgression) => void;
   setConnectedDirectory: (name: string | null) => void;
   setSyncing: (syncing: boolean) => void;
   setLastSyncTime: (time: number | null) => void;
@@ -69,6 +72,9 @@ export type DexSort = 'number' | 'name' | 'level-desc' | 'level-asc' | 'type';
 export type DexShow = 'all' | 'caught' | 'uncaught';
 
 export type DexView = 'list' | 'card';
+
+/** Game-progression (story-order) filter for the dex list. */
+export type DexProgression = null | 'yellow';
 
 export interface DexFilter {
   caughtOnly: boolean;
@@ -102,6 +108,7 @@ export const useAppStore = create<AppState>((set) => ({
   dexView: 'list' as DexView,
   dexGen: null,
   dexSaveId: null,
+  dexProgression: null,
   syncSupported: typeof window !== 'undefined' && 'showDirectoryPicker' in window,
   connectedDirectory: null,
   syncing: false,
@@ -126,6 +133,7 @@ export const useAppStore = create<AppState>((set) => ({
   setDexView: (dexView) => set({ dexView }),
   setDexGen: (dexGen) => set({ dexGen }),
   setDexSaveId: (dexSaveId) => set({ dexSaveId }),
+  setDexProgression: (dexProgression) => set({ dexProgression }),
   setConnectedDirectory: (connectedDirectory) => set({ connectedDirectory }),
   setSyncing: (syncing) => set({ syncing }),
   setLastSyncTime: (lastSyncTime) => set({ lastSyncTime }),

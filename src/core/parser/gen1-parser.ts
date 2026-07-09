@@ -24,6 +24,8 @@ import {
 } from './universal';
 
 const PLAYER_NAME = 0x2598;
+/** Owned badges bitfield: bit 0 = Boulder … bit 7 = Earth. */
+const BADGES = 0x2602;
 const TRAINER_ID = 0x2605;
 const CURRENT_BOX_NUM = 0x284c;
 const PARTY = 0x2f2c;
@@ -153,7 +155,18 @@ export function parseGen1(buffer: ArrayBuffer, game: Game): UniversalSave {
       name: decodeGBText(data, PLAYER_NAME, 11),
       trainerId: readU16BE(data, TRAINER_ID),
       secretId: 0,
+      badges: data[BADGES] ?? 0,
     },
     mons,
   };
+}
+
+/**
+ * Read the Gen 1 badge bitfield from a raw save buffer (English R/B/Y @ 0x2602).
+ * Safe to call on any buffer; returns 0 when the offset is out of range.
+ */
+export function readGen1Badges(data: Uint8Array | ArrayBuffer): number {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  if (bytes.length <= BADGES) return 0;
+  return bytes[BADGES] ?? 0;
 }
