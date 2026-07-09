@@ -74,7 +74,7 @@ export type DexShow = 'all' | 'caught' | 'uncaught';
 export type DexView = 'list' | 'card';
 
 /** Game-progression (story-order) filter for the dex list. */
-export type DexProgression = null | 'yellow';
+export type DexProgression = null | 'yellow' | 'heartgold';
 
 export interface DexFilter {
   caughtOnly: boolean;

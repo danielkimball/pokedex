@@ -10,6 +10,7 @@ import { gameLabel, defaultSpriteUrl } from '../../core/constants/games';
 import { TypeBadge } from '../ui/TypeBadge';
 import { DexCardView } from './DexCardView';
 import { YellowProgressionView } from '../pokedex/YellowProgressionView';
+import { HeartGoldProgressionView } from '../pokedex/HeartGoldProgressionView';
 
 const SPRITE_URL = (n: number) => defaultSpriteUrl(n);
 
@@ -60,6 +61,7 @@ const VERSION_OPTIONS: { value: DexVersion; label: string }[] = [
 const PROGRESSION_OPTIONS: { value: DexProgression; label: string }[] = [
   { value: null, label: 'Off (National Dex)' },
   { value: 'yellow', label: 'Yellow — story order' },
+  { value: 'heartgold', label: 'HeartGold — story order' },
 ];
 
 /** Returns true if locs represent a real catchable location (not just Trade/Event/empty) */
@@ -368,8 +370,9 @@ export function PokedexListScreen() {
               const v = e.target.value;
               const next = (v === '' ? null : v) as DexProgression;
               setDexProgression(next);
-              // Story-order views are Gen-scoped; pin Gen I for Yellow.
+              // Story-order views are Gen-scoped.
               if (next === 'yellow') setDexGen(1);
+              if (next === 'heartgold') setDexGen(null); // Johto+Kanto spans gens 1-2 (+ later via safari etc.)
             }}
             style={s.progressionSelect}
           >
@@ -382,6 +385,14 @@ export function PokedexListScreen() {
 
       {dexProgression === 'yellow' ? (
         <YellowProgressionView
+          caughtSet={caughtSet}
+          focusedSave={focusedSave}
+          saves={saves}
+          searchQuery={searchQuery}
+          show={dexShow}
+        />
+      ) : dexProgression === 'heartgold' ? (
+        <HeartGoldProgressionView
           caughtSet={caughtSet}
           focusedSave={focusedSave}
           saves={saves}
