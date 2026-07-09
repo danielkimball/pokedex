@@ -7,6 +7,7 @@ import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { LOCATIONS } from '../../core/constants/locations';
 import { getAllPokemon } from '../../db/pokemon-store';
 import { gameLabel, defaultSpriteUrl } from '../../core/constants/games';
+import { ownedSpeciesFromSave } from '../../utils/owned-species';
 import { TypeBadge } from '../ui/TypeBadge';
 import { DexCardView } from './DexCardView';
 import { YellowProgressionView } from '../pokedex/YellowProgressionView';
@@ -118,8 +119,11 @@ export function PokedexListScreen() {
 
   // Build max-level lookup per species (for level sorting) and the set of
   // species present in each save (for the per-game filter).
+  // Live-parse raw saves so Day Care / party always count even on stale imports.
   const [levelMap, setLevelMap] = useState<Map<number, number>>(new Map());
   const [bySave, setBySave] = useState<Map<string, Set<number>>>(new Map());
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   useEffect(() => {
     getAllPokemon().then(records => {
       const map = new Map<number, number>();
@@ -131,23 +135,34 @@ export function PokedexListScreen() {
         if (!set) { set = new Set(); saveMap.set(r.saveId, set); }
         set.add(r.species);
       }
+      // Overlay live ownership from raw save bytes (party + PC + Day Care).
+      for (const sv of saves) {
+        const live = ownedSpeciesFromSave(sv);
+        if (live.size === 0) continue;
+        let set = saveMap.get(sv.id);
+        if (!set) { set = new Set(); saveMap.set(sv.id, set); }
+        for (const sp of live) set.add(sp);
+      }
       setLevelMap(map);
       setBySave(saveMap);
     });
-  }, [registryMap]); // re-fetch when registry changes (new import)
+  }, [registryMap, saves]);
 
   // Selected save no longer exists (deleted) → reset to all.
   useEffect(() => {
     if (dexSaveId && !saves.some(s => s.id === dexSaveId)) setDexSaveId(null);
   }, [dexSaveId, saves, setDexSaveId]);
 
-  // Species counted as "caught" for the current view: a specific save's roster,
-  // or every caught species across all saves.
+  // Species counted as "caught": focused save roster, or union of registry + all saves.
   const caughtSet = useMemo(() => {
     if (dexSaveId) return bySave.get(dexSaveId) ?? new Set<number>();
     const set = new Set<number>();
     for (const [species, entry] of registryMap) {
       if (entry.caught) set.add(species);
+    }
+    // Include live-parsed ownership (Day Care etc.) even if registry is stale.
+    for (const owned of bySave.values()) {
+      for (const sp of owned) set.add(sp);
     }
     return set;
   }, [dexSaveId, bySave, registryMap]);
@@ -254,6 +269,13 @@ export function PokedexListScreen() {
 
   const focusedSave = (dexSaveId ? saves.find(s => s.id === dexSaveId) : null) ?? null;
 
+  const activeFilterCount = [
+    dexShow !== 'all',
+    dexVersion !== 'all',
+    dexGen !== null,
+    dexSort !== 'number',
+  ].filter(Boolean).length;
+
   return (
     <div style={s.container}>
       {/* Header */}
@@ -280,108 +302,127 @@ export function PokedexListScreen() {
         </div>
       </div>
 
-      {/* Search */}
-      <div style={s.toolbar}>
+      {/* Compact filter bar: search + path + save always visible */}
+      <div style={s.compactBar}>
         <input
           type="text"
           placeholder="Search name or #..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={s.searchInput}
+          style={s.searchInputCompact}
         />
+        <select
+          value={dexProgression ?? ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            const next = (v === '' ? null : v) as DexProgression;
+            setDexProgression(next);
+            if (next === 'yellow') setDexGen(1);
+            if (next === 'heartgold') setDexGen(null);
+          }}
+          style={s.selectCompact}
+          title="Story path mode"
+        >
+          {PROGRESSION_OPTIONS.map(opt => (
+            <option key={String(opt.value)} value={opt.value ?? ''}>
+              {opt.value === null ? 'National Dex' : opt.label.replace(' — story order', '')}
+            </option>
+          ))}
+        </select>
+        <select
+          value={dexSaveId ?? ''}
+          onChange={(e) => setDexSaveId(e.target.value || null)}
+          style={s.selectCompact}
+          title="Save focus"
+        >
+          <option value="">All saves</option>
+          {saves.map(sv => (
+            <option key={sv.id} value={sv.id}>{gameLabel(sv)} · {sv.trainerName}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          style={filtersOpen || activeFilterCount > 0 ? s.moreBtnActive : s.moreBtn}
+          onClick={() => setFiltersOpen(o => !o)}
+          title="Sort, show, gen, version"
+        >
+          {filtersOpen ? 'Less' : activeFilterCount > 0 ? `More (${activeFilterCount})` : 'More'}
+        </button>
       </div>
 
-      {/* Sort + Filter row */}
-      <div style={s.controlRow}>
-        <div style={s.controlGroup}>
-          <span style={s.controlLabel}>Sort:</span>
-          {SORT_OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              style={dexSort === opt.value ? s.chipActive : s.chip}
-              onClick={() => setDexSort(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
-          <button
-            style={(dexSort === 'level-desc' || dexSort === 'level-asc') ? s.chipActive : s.chip}
-            onClick={handleLevelSort}
-          >
-            Lv{dexSort === 'level-asc' ? '\u25B2' : '\u25BC'}
-          </button>
-          {dexView === 'card' && (
-            <button
-              style={dexSort === 'type' ? s.chipActive : s.chip}
-              onClick={() => setDexSort('type')}
-            >
-              Type
-            </button>
-          )}
-        </div>
-        <div style={s.controlGroup}>
-          <span style={s.controlLabel}>Show:</span>
-          {SHOW_OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              style={dexShow === opt.value ? s.chipActive : s.chip}
-              onClick={() => handleShowToggle(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
-          <select
-            value={dexVersion}
-            onChange={(e) => setDexVersion(e.target.value as DexVersion)}
-            style={s.versionSelect}
-          >
-            {VERSION_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+      {/* Secondary filters — collapsed by default to free vertical space */}
+      {filtersOpen && (
+        <div style={s.morePanel}>
+          <div style={s.moreRow}>
+            <span style={s.moreLabel}>Sort</span>
+            {SORT_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                style={dexSort === opt.value ? s.chipActive : s.chip}
+                onClick={() => setDexSort(opt.value)}
+              >
+                {opt.label}
+              </button>
             ))}
-          </select>
-        </div>
-        <div style={s.controlGroup}>
-          <span style={s.controlLabel}>Gen:</span>
-          {GEN_OPTIONS.map(opt => (
             <button
-              key={String(opt.value)}
-              style={dexGen === opt.value ? s.chipActive : s.chip}
-              onClick={() => setDexGen(opt.value)}
+              style={(dexSort === 'level-desc' || dexSort === 'level-asc') ? s.chipActive : s.chip}
+              onClick={handleLevelSort}
             >
-              {opt.label}
+              Lv{dexSort === 'level-asc' ? '\u25B2' : '\u25BC'}
             </button>
-          ))}
-          <select
-            value={dexSaveId ?? ''}
-            onChange={(e) => setDexSaveId(e.target.value || null)}
-            style={s.versionSelect}
-          >
-            <option value="">All games</option>
-            {saves.map(sv => (
-              <option key={sv.id} value={sv.id}>{gameLabel(sv)} — {sv.trainerName}</option>
+            {dexView === 'card' && (
+              <button
+                style={dexSort === 'type' ? s.chipActive : s.chip}
+                onClick={() => setDexSort('type')}
+              >
+                Type
+              </button>
+            )}
+          </div>
+          <div style={s.moreRow}>
+            <span style={s.moreLabel}>Show</span>
+            <button
+              style={dexShow === 'all' ? s.chipActive : s.chip}
+              onClick={() => setDexShow('all')}
+            >
+              All
+            </button>
+            {SHOW_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                style={dexShow === opt.value ? s.chipActive : s.chip}
+                onClick={() => handleShowToggle(opt.value)}
+              >
+                {opt.label}
+              </button>
             ))}
-          </select>
-        </div>
-        <div style={s.controlGroup}>
-          <span style={s.controlLabel}>Game:</span>
-          <select
-            value={dexProgression ?? ''}
-            onChange={(e) => {
-              const v = e.target.value;
-              const next = (v === '' ? null : v) as DexProgression;
-              setDexProgression(next);
-              // Story-order views are Gen-scoped.
-              if (next === 'yellow') setDexGen(1);
-              if (next === 'heartgold') setDexGen(null); // Johto+Kanto spans gens 1-2 (+ later via safari etc.)
-            }}
-            style={s.progressionSelect}
-          >
-            {PROGRESSION_OPTIONS.map(opt => (
-              <option key={String(opt.value)} value={opt.value ?? ''}>{opt.label}</option>
+          </div>
+          <div style={s.moreRow}>
+            <span style={s.moreLabel}>Gen</span>
+            {GEN_OPTIONS.map(opt => (
+              <button
+                key={String(opt.value)}
+                style={dexGen === opt.value ? s.chipActive : s.chip}
+                onClick={() => setDexGen(opt.value)}
+              >
+                {opt.label}
+              </button>
             ))}
-          </select>
+          </div>
+          <div style={s.moreRow}>
+            <span style={s.moreLabel}>Excl.</span>
+            <select
+              value={dexVersion}
+              onChange={(e) => setDexVersion(e.target.value as DexVersion)}
+              style={s.selectInPanel}
+            >
+              {VERSION_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
-      </div>
+      )}
 
       {dexProgression === 'yellow' ? (
         <YellowProgressionView
@@ -529,85 +570,120 @@ const s = {
     fontWeight: 'bold' as const,
     cursor: 'pointer',
   },
-  toolbar: {
-    padding: '6px 10px',
+  compactBar: {
+    display: 'flex',
+    alignItems: 'center' as const,
+    gap: '4px',
+    padding: '4px 8px',
     flexShrink: 0,
+    borderBottom: '1px solid #11111115',
+    flexWrap: 'wrap' as const,
   },
-  searchInput: {
-    width: '100%',
-    padding: '6px 10px',
+  searchInputCompact: {
+    flex: '1 1 120px',
+    minWidth: '100px',
+    padding: '5px 8px',
     background: '#fffaf0',
     border: '1px solid #11111144',
     borderRadius: '4px',
     color: '#111111',
-    fontSize: '12px',
-    fontFamily: "inherit",
+    fontSize: '11px',
+    fontFamily: 'inherit',
     outline: 'none',
     boxSizing: 'border-box' as const,
   },
-  controlRow: {
-    padding: '2px 10px 4px',
+  selectCompact: {
+    flex: '0 1 auto',
+    maxWidth: '130px',
+    padding: '4px 4px',
+    background: '#fffaf0',
+    border: '1px solid #11111133',
+    borderRadius: '6px',
+    color: '#5d5142',
+    fontSize: '10px',
+    fontFamily: 'inherit',
+    outline: 'none',
+    cursor: 'pointer',
+  },
+  moreBtn: {
+    flex: '0 0 auto',
+    padding: '4px 8px',
+    border: '1px solid #11111133',
+    borderRadius: '6px',
+    background: 'transparent',
+    color: '#5d5142',
+    fontSize: '10px',
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+  },
+  moreBtnActive: {
+    flex: '0 0 auto',
+    padding: '4px 8px',
+    border: '1px solid #111111',
+    borderRadius: '6px',
+    background: 'rgba(204,0,28,0.10)',
+    color: '#111',
+    fontSize: '10px',
+    fontFamily: 'inherit',
+    fontWeight: 'bold' as const,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap' as const,
+  },
+  morePanel: {
+    padding: '4px 8px 6px',
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: '4px',
+    gap: '3px',
     flexShrink: 0,
+    borderBottom: '1px solid #11111115',
+    background: 'rgba(0,0,0,0.02)',
   },
-  controlGroup: {
+  moreRow: {
     display: 'flex',
     alignItems: 'center' as const,
-    gap: '4px',
+    gap: '3px',
     flexWrap: 'wrap' as const,
   },
-  controlLabel: {
-    fontSize: '10px',
+  moreLabel: {
+    fontSize: '9px',
     color: '#5d5142',
-    width: '32px',
+    width: '28px',
     flexShrink: 0,
+    fontWeight: 'bold' as const,
+  },
+  selectInPanel: {
+    padding: '2px 4px',
+    background: '#fffaf0',
+    border: '1px solid #11111133',
+    borderRadius: '6px',
+    color: '#5d5142',
+    fontSize: '10px',
+    fontFamily: 'inherit',
+    outline: 'none',
+    cursor: 'pointer',
+    flex: 1,
+    minWidth: '120px',
   },
   chip: {
-    padding: '2px 8px',
+    padding: '2px 7px',
     border: '1px solid #11111133',
     borderRadius: '10px',
     background: 'transparent',
     color: '#5d5142',
     fontSize: '10px',
-    fontFamily: "inherit",
+    fontFamily: 'inherit',
     cursor: 'pointer',
   },
   chipActive: {
-    padding: '2px 8px',
+    padding: '2px 7px',
     border: '1px solid #111111',
     borderRadius: '10px',
     background: 'rgba(204,0,28,0.10)',
     color: '#111111',
     fontSize: '10px',
-    fontFamily: "inherit",
+    fontFamily: 'inherit',
     cursor: 'pointer',
-  },
-  versionSelect: {
-    padding: '2px 4px',
-    background: '#fffaf0',
-    border: '1px solid #11111133',
-    borderRadius: '10px',
-    color: '#5d5142',
-    fontSize: '10px',
-    fontFamily: "inherit",
-    outline: 'none',
-    cursor: 'pointer',
-    marginLeft: 'auto',
-  },
-  progressionSelect: {
-    padding: '2px 4px',
-    background: '#fffaf0',
-    border: '1px solid #11111133',
-    borderRadius: '10px',
-    color: '#5d5142',
-    fontSize: '10px',
-    fontFamily: "inherit",
-    outline: 'none',
-    cursor: 'pointer',
-    flex: 1,
-    minWidth: '140px',
   },
   resultCount: {
     padding: '2px 10px 4px',

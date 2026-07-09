@@ -17,7 +17,6 @@ import {
   hasBadge,
   countJohtoBadges,
   countKantoBadges,
-  countBadges,
   hgSpeciesAvailableNow,
   mergeTools,
   encounterAvailable,
@@ -157,7 +156,6 @@ export function HeartGoldProgressionView({
   );
   const johto = countJohtoBadges(progress.badges);
   const kanto = countKantoBadges(progress.badges);
-  const total = countBadges(progress.badges);
 
   const availableSet = useMemo(() => hgSpeciesAvailableNow(progress), [progress]);
   const progressStats = useMemo(() => {
@@ -179,13 +177,6 @@ export function HeartGoldProgressionView({
     navigate(`/dex/${dexNum}`);
   }, [navigate]);
 
-  const latestBadge = useMemo(() => {
-    for (let i = 15; i >= 0; i--) {
-      if (hasBadge(progress.badges, i)) return HG_BADGES[i];
-    }
-    return null;
-  }, [progress.badges]);
-
   const visibleAreas = useMemo(() => {
     const list = mode === 'all' ? [...storyAreas, ...metaAreas] : storyAreas;
     return list.filter(area => {
@@ -206,28 +197,8 @@ export function HeartGoldProgressionView({
 
   return (
     <div style={s.wrap}>
+      {/* Single compact strip: badges + mode + count */}
       <div style={s.banner}>
-        <div style={s.bannerTop}>
-          <strong style={s.bannerTitle}>HeartGold · Story path</strong>
-          <span style={s.bannerCount}>
-            {mode === 'progressive'
-              ? `${progressStats.caught}/${progressStats.available} open`
-              : `${storyAreas.length} stops`}
-          </span>
-        </div>
-
-        <div style={s.bannerSub}>
-          {source ? (
-            <>
-              <strong>{source.trainerName || '???'}</strong>
-              {latestBadge ? <> · {latestBadge.name}</> : ' · no badges yet'}
-              {' · '}{johto}/8 Johto · {kanto}/8 Kanto
-            </>
-          ) : (
-            <>Import a HeartGold save (or select it under All games) to track badges.</>
-          )}
-        </div>
-
         <div style={s.badgeStrip}>
           {HG_BADGES.filter(b => b.region === 'johto').map(b => (
             <div
@@ -236,14 +207,11 @@ export function HeartGoldProgressionView({
               style={{
                 ...s.badgeDot,
                 background: hasBadge(progress.badges, b.index) ? (BADGE_COLORS[b.emblem] || '#888') : '#e8e0d0',
-                borderColor: hasBadge(progress.badges, b.index) ? '#111' : '#bbb',
-                color: hasBadge(progress.badges, b.index) ? '#fff' : '#888',
+                borderColor: hasBadge(progress.badges, b.index) ? '#111' : '#ccc',
               }}
-            >
-              {b.index + 1}
-            </div>
+            />
           ))}
-          <span style={s.regionSep}>K</span>
+          <span style={s.regionSep}>|</span>
           {HG_BADGES.filter(b => b.region === 'kanto').map(b => (
             <div
               key={b.index}
@@ -251,24 +219,15 @@ export function HeartGoldProgressionView({
               style={{
                 ...s.badgeDot,
                 background: hasBadge(progress.badges, b.index) ? (BADGE_COLORS[b.emblem] || '#888') : '#e8e0d0',
-                borderColor: hasBadge(progress.badges, b.index) ? '#111' : '#bbb',
-                color: hasBadge(progress.badges, b.index) ? '#fff' : '#888',
+                borderColor: hasBadge(progress.badges, b.index) ? '#111' : '#ccc',
               }}
-            >
-              {b.index - 7}
-            </div>
+            />
           ))}
+          <span style={s.badgeMeta}>
+            {source ? `${johto + kanto}/16` : '0/16'}
+            {mode === 'progressive' ? ` · ${progressStats.caught}/${progressStats.available}` : ''}
+          </span>
         </div>
-
-        {mode === 'progressive' && (
-          <div style={progressStats.missing === 0 && progressStats.available > 0 ? s.greatLine : s.missingLine}>
-            {progressStats.missing === 0 && progressStats.available > 0
-              ? "You're caught up — everything open right now is checked off."
-              : `${progressStats.missing} still open before your next badge or HM.`}
-          </div>
-        )}
-
-        {/* Only two filters */}
         <div style={s.modeRow}>
           <button
             type="button"
@@ -284,11 +243,6 @@ export function HeartGoldProgressionView({
           >
             All spots
           </button>
-        </div>
-        <div style={s.modeHint}>
-          {mode === 'progressive'
-            ? 'Only places you can reach and mons you can catch now.'
-            : 'Full optimal path — every town and route in play order.'}
         </div>
       </div>
 
@@ -371,44 +325,37 @@ export function HeartGoldProgressionView({
 const s = {
   wrap: { display: 'flex', flexDirection: 'column' as const, flex: 1, minHeight: 0 },
   banner: {
-    padding: '8px 10px',
+    padding: '4px 8px 5px',
     borderBottom: '1px solid #11111122',
     background: 'rgba(255,250,240,0.9)',
     flexShrink: 0,
-  },
-  bannerTop: {
     display: 'flex',
-    justifyContent: 'space-between' as const,
-    alignItems: 'baseline' as const,
-    gap: '8px',
+    flexDirection: 'column' as const,
+    gap: '4px',
   },
-  bannerTitle: { fontSize: '12px', color: '#111' },
-  bannerCount: { fontSize: '12px', fontWeight: 'bold' as const, color: '#111' },
-  bannerSub: { fontSize: '10px', color: '#5d5142', marginTop: '2px', lineHeight: 1.35 },
   badgeStrip: {
-    display: 'flex', gap: '3px', marginTop: '8px', flexWrap: 'wrap' as const,
+    display: 'flex', gap: '2px', flexWrap: 'wrap' as const,
     alignItems: 'center' as const,
   },
-  regionSep: { fontSize: '10px', color: '#5d514288', margin: '0 3px', fontWeight: 'bold' as const },
+  regionSep: { fontSize: '9px', color: '#5d514255', margin: '0 2px' },
   badgeDot: {
-    width: '20px', height: '20px', borderRadius: '50%', border: '1.5px solid #111',
-    display: 'flex', alignItems: 'center' as const, justifyContent: 'center' as const,
-    fontSize: '8px', fontWeight: 'bold' as const, fontFamily: 'inherit',
+    width: '9px', height: '9px', borderRadius: '50%', border: '1px solid #111',
+    flexShrink: 0,
   },
-  greatLine: { marginTop: '6px', fontSize: '11px', fontWeight: 'bold' as const, color: '#1a7a3a' },
-  missingLine: { marginTop: '6px', fontSize: '10px', color: '#5d5142' },
-  modeRow: { display: 'flex', gap: '6px', marginTop: '8px' },
+  badgeMeta: {
+    marginLeft: '6px', fontSize: '10px', color: '#5d5142', fontWeight: 'bold' as const,
+  },
+  modeRow: { display: 'flex', gap: '4px' },
   modeOn: {
-    flex: 1, padding: '6px 10px', border: '1px solid #111', borderRadius: '8px',
-    background: 'rgba(204,0,28,0.12)', color: '#111', fontSize: '12px',
+    flex: 1, padding: '4px 8px', border: '1px solid #111', borderRadius: '6px',
+    background: 'rgba(204,0,28,0.12)', color: '#111', fontSize: '11px',
     fontFamily: 'inherit', fontWeight: 'bold' as const, cursor: 'pointer',
   },
   modeOff: {
-    flex: 1, padding: '6px 10px', border: '1px solid #11111133', borderRadius: '8px',
-    background: '#fffaf0', color: '#5d5142', fontSize: '12px',
+    flex: 1, padding: '4px 8px', border: '1px solid #11111133', borderRadius: '6px',
+    background: '#fffaf0', color: '#5d5142', fontSize: '11px',
     fontFamily: 'inherit', cursor: 'pointer',
   },
-  modeHint: { fontSize: '10px', color: '#5d514288', marginTop: '4px' },
   list: { flex: 1, overflowY: 'auto' as const, minHeight: 0 },
   section: { borderBottom: '1px solid #11111118' },
   sectionHeader: {
