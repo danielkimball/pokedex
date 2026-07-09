@@ -1,7 +1,7 @@
 import { useRef, useMemo, useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useAppStore, type DexSort, type DexShow, type DexVersion, type DexView, type DexProgression } from '../../state/store';
+import { useAppStore, type DexSort, type DexShow, type DexVersion, type DexView } from '../../state/store';
 import { SPECIES } from '../../core/constants/species';
 import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { LOCATIONS } from '../../core/constants/locations';
@@ -43,11 +43,6 @@ function getTypesForSpecies(speciesIndex: number): string[] {
 const SORT_OPTIONS: { value: DexSort; label: string }[] = [
   { value: 'number', label: '#' },
   { value: 'name', label: 'A-Z' },
-];
-
-const SHOW_OPTIONS: { value: DexShow; label: string }[] = [
-  { value: 'caught', label: 'Caught' },
-  { value: 'uncaught', label: 'Missing' },
 ];
 
 const VERSION_OPTIONS: { value: DexVersion; label: string }[] = [
@@ -263,15 +258,7 @@ export function PokedexListScreen() {
 
   const focusedSave = (dexSaveId ? saves.find(s => s.id === dexSaveId) : null) ?? null;
 
-  const activeFilterCount = [
-    dexProgression != null,
-    dexShow !== 'all',
-    dexVersion !== 'all',
-    dexGen !== null,
-    dexSort !== 'number',
-  ].filter(Boolean).length;
-
-  // Migrate legacy progression keys from older sessions
+  // Migrate legacy progression keys; null = Collection mode
   const guideId = useMemo(() => {
     if (!dexProgression) return null;
     if (dexProgression === 'yellow') return 'Yellow';
@@ -279,52 +266,115 @@ export function PokedexListScreen() {
     return getGuide(dexProgression) ? dexProgression : null;
   }, [dexProgression]);
 
+  const isStory = guideId != null;
+
+  /** Enter story mode for a cartridge; auto-focus a matching save when possible. */
+  const enterStory = useCallback((gameId: string) => {
+    setDexProgression(gameId);
+    setDexVersion('all');
+    const g = getGuide(gameId);
+    if (g) {
+      // Gen filter is collection-only; clear so it never fights story mode
+      setDexGen(null);
+      const match = saves.find(sv => g.matchSave(sv));
+      if (match) setDexSaveId(match.id);
+    }
+  }, [setDexProgression, setDexVersion, setDexGen, setDexSaveId, saves]);
+
+  const enterCollection = useCallback(() => {
+    setDexProgression(null);
+  }, [setDexProgression]);
+
+  const collectionFilterCount = [
+    dexShow !== 'all',
+    dexVersion !== 'all',
+    dexGen !== null,
+    dexSort !== 'number',
+  ].filter(Boolean).length;
+
   return (
     <div style={s.container}>
-      {/* Header */}
-      <div style={s.header}>
-        <button style={s.backBtn} onClick={() => navigate('/')}>
-          {'<'} BACK
+      {/* ── Masthead ── */}
+      <div style={s.masthead}>
+        <button type="button" style={s.backBtn} onClick={() => navigate('/')}>
+          {'\u2039'} Back
         </button>
-        <div style={s.headerRight}>
-          <div style={s.viewToggle}>
-            {(['list', 'card'] as DexView[]).map(v => (
-              <button
-                key={v}
-                style={dexView === v ? s.viewToggleActive : s.viewToggleBtn}
-                onClick={() => setDexView(v)}
-              >
-                {v === 'list' ? 'List' : 'Cards'}
-              </button>
-            ))}
+        <div style={s.mastheadCenter}>
+          <div style={s.modeSeg}>
+            <button
+              type="button"
+              style={!isStory ? s.modeSegOn : s.modeSegOff}
+              onClick={enterCollection}
+              title="National Dex living collection"
+            >
+              Collection
+            </button>
+            <button
+              type="button"
+              style={isStory ? s.modeSegOn : s.modeSegOff}
+              onClick={() => {
+                if (!isStory) {
+                  // Prefer a save's game, else HeartGold / Yellow
+                  const fromSave = focusedSave?.game && getGuide(focusedSave.game)
+                    ? focusedSave.game
+                    : saves.map(sv => sv.game).find(g => g && getGuide(g))
+                      ?? 'HeartGold';
+                  enterStory(fromSave);
+                }
+              }}
+              title="Catch-as-you-play guide for one cartridge"
+            >
+              Story
+            </button>
           </div>
+        </div>
+        <div style={s.mastheadRight}>
+          {!isStory && (
+            <div style={s.viewToggle}>
+              {(['list', 'card'] as DexView[]).map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  style={dexView === v ? s.viewToggleActive : s.viewToggleBtn}
+                  onClick={() => setDexView(v)}
+                >
+                  {v === 'list' ? 'List' : 'Cards'}
+                </button>
+              ))}
+            </div>
+          )}
           <span style={s.headerCount}>
-            {caughtInView}/{genTotal}
-            {focusedSave ? ` · ${gameLabel(focusedSave)}` : dexGen ? ` · Gen ${GEN_OPTIONS.find(o => o.value === dexGen)?.label}` : ''}
+            {isStory
+              ? (focusedSave ? gameLabel(focusedSave) : guideId)
+              : `${caughtInView}/${genTotal}`}
           </span>
         </div>
       </div>
 
-      {/* Always visible: full-width search + save focus */}
-      <div style={s.topFilters}>
+      {/* ── Search ── */}
+      <div style={s.searchWrap}>
+        <span style={s.searchIcon} aria-hidden>⌕</span>
         <input
           type="text"
-          placeholder="Search name or #..."
+          placeholder="Search name or number…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={s.searchFull}
+          style={s.searchInput}
           aria-label="Search Pokémon by name or number"
         />
-        <div style={s.saveRow}>
-          <label style={s.fieldLabel} htmlFor="dex-save-filter">Save</label>
+      </div>
+
+      {/* ── Context bar: owned-by + mode-specific primary control ── */}
+      <div style={s.contextBar}>
+        <div style={s.contextField}>
+          <span style={s.contextLabel}>Owned by</span>
           <select
-            id="dex-save-filter"
             value={dexSaveId ?? ''}
             onChange={(e) => setDexSaveId(e.target.value || null)}
-            style={s.saveSelect}
-            title="Only count Pokémon from this imported save as caught"
+            style={s.contextSelect}
+            title="Which save marks species as caught"
           >
-            <option value="">All saves (any game)</option>
+            <option value="">All saves</option>
             {saves.map(sv => (
               <option key={sv.id} value={sv.id}>
                 {gameLabel(sv)} — {sv.trainerName}
@@ -332,129 +382,157 @@ export function PokedexListScreen() {
             ))}
           </select>
         </div>
-        <button
-          type="button"
-          style={s.moreToggle}
-          onClick={() => setFiltersOpen(o => !o)}
-          aria-expanded={filtersOpen}
-        >
-          {filtersOpen ? (
-            <>Less <span style={s.chevron}>{'^'}</span></>
-          ) : (
-            <>More{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''} <span style={s.chevron}>{'v'}</span></>
-          )}
-        </button>
-      </div>
 
-      {/* Collapsible filters — clear labels */}
-      {filtersOpen && (
-        <div style={s.morePanel}>
-          <div style={s.moreRow}>
-            <label style={s.fieldLabel} htmlFor="dex-path-filter">Story path</label>
+        {isStory ? (
+          <div style={s.contextField}>
+            <span style={s.contextLabel}>Playing</span>
             <select
-              id="dex-path-filter"
               value={guideId ?? ''}
               onChange={(e) => {
                 const v = e.target.value;
-                const next = (v === '' ? null : v) as DexProgression;
-                setDexProgression(next);
-                const g = getGuide(next);
-                if (g?.generation === 1) setDexGen(1);
-                else if (g?.generation === 2) setDexGen(2);
-                else if (g?.generation === 3) setDexGen(3);
-                else if (next === null) { /* keep gen */ }
-                else setDexGen(null);
+                if (v) enterStory(v);
+                else enterCollection();
               }}
-              style={s.selectInPanel}
-              title="Group the list by in-game story order for a specific cartridge"
+              style={s.contextSelect}
+              title="Cartridge story guide"
             >
-              {PROGRESSION_GAME_OPTIONS.map(opt => (
-                <option key={String(opt.id)} value={opt.id ?? ''}>
-                  {opt.group ? `${opt.group}: ${opt.label}` : opt.label}
+              {PROGRESSION_GAME_OPTIONS.filter(o => o.id != null).map(opt => (
+                <option key={String(opt.id)} value={opt.id!}>
+                  {opt.group ? `${opt.label} (${opt.group})` : opt.label}
                 </option>
               ))}
             </select>
           </div>
-          <div style={s.moreRow}>
-            <span style={s.fieldLabel}>Sort by</span>
-            {SORT_OPTIONS.map(opt => (
+        ) : (
+          <div style={s.contextField}>
+            <span style={s.contextLabel}>Show</span>
+            <div style={s.pillGroup}>
               <button
-                key={opt.value}
-                style={dexSort === opt.value ? s.chipActive : s.chip}
-                onClick={() => setDexSort(opt.value)}
-                title={opt.value === 'number' ? 'National Dex number' : opt.value === 'name' ? 'Alphabetical' : 'Level'}
+                type="button"
+                style={dexShow === 'all' ? s.pillOn : s.pillOff}
+                onClick={() => setDexShow('all')}
               >
-                {opt.label}
+                All
               </button>
-            ))}
-            <button
-              style={(dexSort === 'level-desc' || dexSort === 'level-asc') ? s.chipActive : s.chip}
-              onClick={handleLevelSort}
-              title="Sort by highest level owned"
-            >
-              Level{dexSort === 'level-asc' ? ' ^' : ' v'}
-            </button>
-            {dexView === 'card' && (
               <button
-                style={dexSort === 'type' ? s.chipActive : s.chip}
-                onClick={() => setDexSort('type')}
-                title="Sort by type"
+                type="button"
+                style={dexShow === 'caught' ? s.pillOn : s.pillOff}
+                onClick={() => handleShowToggle('caught')}
               >
-                Type
+                Caught
               </button>
-            )}
-          </div>
-          <div style={s.moreRow}>
-            <span style={s.fieldLabel}>Caught</span>
-            <button
-              style={dexShow === 'all' ? s.chipActive : s.chip}
-              onClick={() => setDexShow('all')}
-              title="Show every species"
-            >
-              All
-            </button>
-            {SHOW_OPTIONS.map(opt => (
               <button
-                key={opt.value}
-                style={dexShow === opt.value ? s.chipActive : s.chip}
-                onClick={() => handleShowToggle(opt.value)}
-                title={opt.value === 'caught' ? 'Only species you own' : 'Only species you are missing'}
+                type="button"
+                style={dexShow === 'uncaught' ? s.pillOn : s.pillOff}
+                onClick={() => handleShowToggle('uncaught')}
               >
-                {opt.label}
+                Missing
               </button>
-            ))}
+            </div>
           </div>
-          <div style={s.moreRow}>
-            <span style={s.fieldLabel}>Generation</span>
-            {GEN_OPTIONS.map(opt => (
-              <button
-                key={String(opt.value)}
-                style={dexGen === opt.value ? s.chipActive : s.chip}
-                onClick={() => setDexGen(opt.value)}
-                title={opt.value == null ? 'All generations' : `Generation ${opt.label} only`}
-              >
-                {opt.label}
-              </button>
-            ))}
+        )}
+      </div>
+
+      {/* ── Collection-only: sort / gen / exclusives (collapsible) ── */}
+      {!isStory && (
+        <>
+          <button
+            type="button"
+            style={s.refineToggle}
+            onClick={() => setFiltersOpen(o => !o)}
+            aria-expanded={filtersOpen}
+          >
+            {filtersOpen ? 'Hide filters' : 'Refine'}
+            {collectionFilterCount > 0 && !filtersOpen ? ` · ${collectionFilterCount} active` : ''}
+            <span style={s.chevron}>{filtersOpen ? '▴' : '▾'}</span>
+          </button>
+          {filtersOpen && (
+            <div style={s.refinePanel}>
+              <div style={s.refineBlock}>
+                <span style={s.refineTitle}>Sort</span>
+                <div style={s.pillGroup}>
+                  {SORT_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      style={dexSort === opt.value ? s.pillOn : s.pillOff}
+                      onClick={() => setDexSort(opt.value)}
+                    >
+                      {opt.label === '#' ? 'Dex #' : opt.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    style={(dexSort === 'level-desc' || dexSort === 'level-asc') ? s.pillOn : s.pillOff}
+                    onClick={handleLevelSort}
+                  >
+                    Level {dexSort === 'level-asc' ? '↑' : '↓'}
+                  </button>
+                  {dexView === 'card' && (
+                    <button
+                      type="button"
+                      style={dexSort === 'type' ? s.pillOn : s.pillOff}
+                      onClick={() => setDexSort('type')}
+                    >
+                      Type
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div style={s.refineBlock}>
+                <span style={s.refineTitle}>Generation</span>
+                <div style={s.pillGroup}>
+                  {GEN_OPTIONS.map(opt => (
+                    <button
+                      key={String(opt.value)}
+                      type="button"
+                      style={dexGen === opt.value ? s.pillOn : s.pillOff}
+                      onClick={() => setDexGen(opt.value)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={s.refineBlock}>
+                <span style={s.refineTitle}>Version exclusives</span>
+                <select
+                  value={dexVersion}
+                  onChange={(e) => setDexVersion(e.target.value as DexVersion)}
+                  style={s.refineSelect}
+                >
+                  {VERSION_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+          {/* Status strip for collection */}
+          <div style={s.statusStrip}>
+            <span>{showingLabel}</span>
+            {focusedSave && <span style={s.statusMuted}> · owned in {gameLabel(focusedSave)}</span>}
           </div>
-          <div style={s.moreRow}>
-            <label style={s.fieldLabel} htmlFor="dex-excl-filter">Version exclusive</label>
-            <select
-              id="dex-excl-filter"
-              value={dexVersion}
-              onChange={(e) => setDexVersion(e.target.value as DexVersion)}
-              style={s.selectInPanel}
-              title="Show only version-exclusive species (Gen 4)"
-            >
-              {VERSION_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+        </>
+      )}
+
+      {/* ── Story mode: catch filter only (status shared) ── */}
+      {isStory && (
+        <div style={s.storyMeta}>
+          <div style={s.pillGroup}>
+            <button type="button" style={dexShow === 'all' ? s.pillOn : s.pillOff} onClick={() => setDexShow('all')}>All</button>
+            <button type="button" style={dexShow === 'caught' ? s.pillOn : s.pillOff} onClick={() => handleShowToggle('caught')}>Caught</button>
+            <button type="button" style={dexShow === 'uncaught' ? s.pillOn : s.pillOff} onClick={() => handleShowToggle('uncaught')}>Missing</button>
           </div>
+          <span style={s.statusMuted}>
+            {focusedSave
+              ? `Catch marks from ${svLabel(focusedSave)}`
+              : 'Catch marks from all saves'}
+          </span>
         </div>
       )}
 
-      {guideId ? (
+      {isStory && guideId ? (
         <GameProgressionView
           guideId={guideId}
           caughtSet={caughtSet}
@@ -466,70 +544,71 @@ export function PokedexListScreen() {
       ) : dexView === 'card' ? (
         <DexCardView />
       ) : (
-        <>
-      {/* Result count */}
-      <div style={s.resultCount}>{showingLabel}</div>
+        <div ref={parentRef} style={s.listParent}>
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const dexNum = filteredEntries[virtualRow.index];
+              const name = SPECIES[dexNum];
+              const isCaught = caughtSet.has(dexNum);
+              const types = getTypesForSpecies(dexNum);
 
-      {/* Virtualized list */}
-      <div ref={parentRef} style={s.listParent}>
-        <div
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-            const dexNum = filteredEntries[virtualRow.index];
-            const name = SPECIES[dexNum];
-            const isCaught = caughtSet.has(dexNum);
-            const types = getTypesForSpecies(dexNum);
-
-            return (
-              <div
-                key={dexNum}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              >
+              return (
                 <div
+                  key={dexNum}
                   style={{
-                    ...s.row,
-                    background: isCaught ? 'rgba(40,120,64,0.08)' : 'transparent',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
                   }}
-                  onClick={() => handleRowClick(dexNum)}
                 >
-                  <span style={s.caughtDot}>
-                    {isCaught ? '\u25CF' : '\u25CB'}
-                  </span>
-                  <span style={s.dexNum}>#{String(dexNum).padStart(3, '0')}</span>
-                  <img
-                    src={SPRITE_URL(dexNum)}
-                    alt={name}
-                    style={s.sprite}
-                    loading="lazy"
-                  />
-                  <div style={s.nameCol}>
-                    <span style={s.name}>{name}</span>
-                    <span style={s.typeRow}>
-                      {types.map(t => <TypeBadge key={t} type={t} />)}
+                  <div
+                    style={{
+                      ...s.row,
+                      background: isCaught ? 'rgba(40,120,64,0.07)' : 'transparent',
+                    }}
+                    onClick={() => handleRowClick(dexNum)}
+                  >
+                    <span style={{
+                      ...s.caughtDot,
+                      color: isCaught ? '#1a7a3a' : '#bbb',
+                    }}>
+                      {isCaught ? '\u25CF' : '\u25CB'}
                     </span>
+                    <span style={s.dexNum}>#{String(dexNum).padStart(3, '0')}</span>
+                    <img
+                      src={SPRITE_URL(dexNum)}
+                      alt={name}
+                      style={s.sprite}
+                      loading="lazy"
+                    />
+                    <div style={s.nameCol}>
+                      <span style={s.name}>{name}</span>
+                      <span style={s.typeRow}>
+                        {types.map(t => <TypeBadge key={t} type={t} />)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
-        </>
       )}
     </div>
   );
+}
+
+function svLabel(sv: { game?: string | null; gameVersion?: string | null; trainerName: string }) {
+  return `${gameLabel(sv)} (${sv.trainerName})`;
 }
 
 const s = {
@@ -537,196 +616,275 @@ const s = {
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100%',
-    fontFamily: "inherit",
-    background: '#f4f1e8',
-    color: '#111111',
+    fontFamily: 'inherit',
+    background: 'linear-gradient(180deg, #f7f3ea 0%, #f0ebe0 100%)',
+    color: '#1a1510',
   },
-  header: {
+  masthead: {
     display: 'flex',
-    justifyContent: 'space-between' as const,
     alignItems: 'center' as const,
-    padding: '6px 10px',
-    borderBottom: '1px solid #11111122',
+    justifyContent: 'space-between' as const,
+    gap: '8px',
+    padding: '8px 10px',
     flexShrink: 0,
+    background: 'linear-gradient(180deg, #cc001c 0%, #a00016 100%)',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
   },
   backBtn: {
-    background: 'none',
-    border: 'none',
-    color: '#111111',
-    fontSize: '12px',
-    fontFamily: "inherit",
+    background: 'rgba(255,255,255,0.12)',
+    border: '1px solid rgba(255,255,255,0.25)',
+    borderRadius: '6px',
+    color: '#fff8e8',
+    fontSize: '11px',
+    fontFamily: 'inherit',
+    fontWeight: 'bold' as const,
     cursor: 'pointer',
-    padding: '4px 8px',
+    padding: '5px 10px',
+    flexShrink: 0,
   },
-  headerRight: {
+  mastheadCenter: {
+    flex: 1,
+    display: 'flex',
+    justifyContent: 'center' as const,
+  },
+  modeSeg: {
+    display: 'flex',
+    background: 'rgba(0,0,0,0.22)',
+    borderRadius: '8px',
+    padding: '2px',
+    gap: '2px',
+  },
+  modeSegOn: {
+    padding: '5px 14px',
+    border: 'none',
+    borderRadius: '6px',
+    background: '#fff8e8',
+    color: '#a00016',
+    fontSize: '11px',
+    fontFamily: 'inherit',
+    fontWeight: 'bold' as const,
+    cursor: 'pointer',
+  },
+  modeSegOff: {
+    padding: '5px 14px',
+    border: 'none',
+    borderRadius: '6px',
+    background: 'transparent',
+    color: 'rgba(255,248,232,0.75)',
+    fontSize: '11px',
+    fontFamily: 'inherit',
+    cursor: 'pointer',
+  },
+  mastheadRight: {
     display: 'flex',
     alignItems: 'center' as const,
-    gap: '8px',
+    gap: '6px',
+    flexShrink: 0,
   },
   headerCount: {
-    fontSize: '12px',
-    color: '#111111',
+    fontSize: '11px',
+    color: '#fff8e8',
     fontWeight: 'bold' as const,
+    opacity: 0.95,
   },
   viewToggle: {
     display: 'flex',
-    border: '1px solid #11111133',
-    borderRadius: '10px',
+    border: '1px solid rgba(255,255,255,0.3)',
+    borderRadius: '6px',
     overflow: 'hidden' as const,
   },
   viewToggleBtn: {
-    padding: '3px 10px',
+    padding: '3px 8px',
     border: 'none',
     background: 'transparent',
-    color: '#5d5142',
+    color: 'rgba(255,248,232,0.7)',
     fontSize: '10px',
     fontFamily: 'inherit',
     cursor: 'pointer',
   },
   viewToggleActive: {
-    padding: '3px 10px',
+    padding: '3px 8px',
     border: 'none',
-    background: '#cc001c',
+    background: 'rgba(255,255,255,0.2)',
     color: '#fff8e8',
     fontSize: '10px',
     fontFamily: 'inherit',
     fontWeight: 'bold' as const,
     cursor: 'pointer',
   },
-  topFilters: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '4px',
-    padding: '6px 10px 4px',
-    flexShrink: 0,
-    borderBottom: '1px solid #11111115',
-  },
-  searchFull: {
-    width: '100%',
-    padding: '7px 10px',
-    background: '#fffaf0',
-    border: '1px solid #11111144',
-    borderRadius: '4px',
-    color: '#111111',
-    fontSize: '12px',
-    fontFamily: 'inherit',
-    outline: 'none',
-    boxSizing: 'border-box' as const,
-  },
-  saveRow: {
+  searchWrap: {
     display: 'flex',
     alignItems: 'center' as const,
     gap: '6px',
-  },
-  fieldLabel: {
-    fontSize: '10px',
-    color: '#5d5142',
-    fontWeight: 'bold' as const,
+    margin: '8px 10px 0',
+    padding: '0 10px',
+    background: '#fffcf5',
+    border: '1px solid rgba(0,0,0,0.1)',
+    borderRadius: '8px',
+    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)',
     flexShrink: 0,
-    minWidth: '72px',
   },
-  saveSelect: {
+  searchIcon: {
+    fontSize: '14px',
+    color: '#8a7d6b',
+    lineHeight: 1,
+  },
+  searchInput: {
     flex: 1,
-    padding: '4px 6px',
-    background: '#fffaf0',
-    border: '1px solid #11111133',
+    padding: '8px 0',
+    background: 'transparent',
+    border: 'none',
+    color: '#1a1510',
+    fontSize: '13px',
+    fontFamily: 'inherit',
+    outline: 'none',
+  },
+  contextBar: {
+    display: 'flex',
+    gap: '8px',
+    padding: '8px 10px 6px',
+    flexShrink: 0,
+    flexWrap: 'wrap' as const,
+  },
+  contextField: {
+    flex: '1 1 140px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '3px',
+    minWidth: 0,
+  },
+  contextLabel: {
+    fontSize: '9px',
+    fontWeight: 'bold' as const,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase' as const,
+    color: '#8a7d6b',
+  },
+  contextSelect: {
+    width: '100%',
+    padding: '6px 8px',
+    background: '#fffcf5',
+    border: '1px solid rgba(0,0,0,0.12)',
     borderRadius: '6px',
-    color: '#5d5142',
+    color: '#1a1510',
     fontSize: '11px',
     fontFamily: 'inherit',
     outline: 'none',
     cursor: 'pointer',
-    minWidth: 0,
   },
-  moreToggle: {
-    alignSelf: 'flex-start',
-    padding: '0 2px',
-    border: 'none',
-    background: 'transparent',
+  pillGroup: {
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: '3px',
+  },
+  pillOn: {
+    padding: '4px 10px',
+    border: '1px solid #a00016',
+    borderRadius: '999px',
+    background: 'rgba(204,0,28,0.12)',
+    color: '#8a0012',
+    fontSize: '10px',
+    fontFamily: 'inherit',
+    fontWeight: 'bold' as const,
+    cursor: 'pointer',
+  },
+  pillOff: {
+    padding: '4px 10px',
+    border: '1px solid rgba(0,0,0,0.12)',
+    borderRadius: '999px',
+    background: '#fffcf5',
     color: '#5d5142',
     fontSize: '10px',
     fontFamily: 'inherit',
     cursor: 'pointer',
-    opacity: 0.85,
   },
-  chevron: {
-    fontSize: '9px',
-    opacity: 0.7,
-  },
-  morePanel: {
-    padding: '4px 10px 8px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '5px',
-    flexShrink: 0,
-    borderBottom: '1px solid #11111115',
-    background: 'rgba(0,0,0,0.025)',
-  },
-  moreRow: {
+  refineToggle: {
+    alignSelf: 'flex-start',
+    margin: '0 10px 4px',
+    padding: '2px 0',
+    border: 'none',
+    background: 'transparent',
+    color: '#8a7d6b',
+    fontSize: '10px',
+    fontFamily: 'inherit',
+    cursor: 'pointer',
     display: 'flex',
     alignItems: 'center' as const,
     gap: '4px',
-    flexWrap: 'wrap' as const,
+    flexShrink: 0,
   },
-  selectInPanel: {
-    padding: '3px 6px',
-    background: '#fffaf0',
-    border: '1px solid #11111133',
+  chevron: { fontSize: '9px', opacity: 0.8 },
+  refinePanel: {
+    margin: '0 10px 6px',
+    padding: '8px 10px',
+    background: 'rgba(255,252,245,0.9)',
+    border: '1px solid rgba(0,0,0,0.08)',
+    borderRadius: '8px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '8px',
+    flexShrink: 0,
+  },
+  refineBlock: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '4px',
+  },
+  refineTitle: {
+    fontSize: '9px',
+    fontWeight: 'bold' as const,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase' as const,
+    color: '#8a7d6b',
+  },
+  refineSelect: {
+    padding: '5px 8px',
+    background: '#fff',
+    border: '1px solid rgba(0,0,0,0.12)',
     borderRadius: '6px',
-    color: '#5d5142',
+    color: '#1a1510',
     fontSize: '11px',
     fontFamily: 'inherit',
     outline: 'none',
     cursor: 'pointer',
-    flex: 1,
-    minWidth: '140px',
   },
-  chip: {
-    padding: '2px 7px',
-    border: '1px solid #11111133',
-    borderRadius: '10px',
-    background: 'transparent',
+  statusStrip: {
+    padding: '2px 12px 6px',
+    fontSize: '10px',
     color: '#5d5142',
-    fontSize: '10px',
-    fontFamily: 'inherit',
-    cursor: 'pointer',
-  },
-  chipActive: {
-    padding: '2px 7px',
-    border: '1px solid #111111',
-    borderRadius: '10px',
-    background: 'rgba(204,0,28,0.10)',
-    color: '#111111',
-    fontSize: '10px',
-    fontFamily: 'inherit',
-    cursor: 'pointer',
-  },
-  resultCount: {
-    padding: '2px 10px 4px',
-    fontSize: '10px',
-    color: '#5d514288',
-    borderBottom: '1px solid #11111115',
     flexShrink: 0,
+  },
+  statusMuted: {
+    color: '#8a7d6b',
+  },
+  storyMeta: {
+    display: 'flex',
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: '8px',
+    padding: '0 10px 6px',
+    flexShrink: 0,
+    flexWrap: 'wrap' as const,
   },
   listParent: {
     flex: 1,
     overflowY: 'auto' as const,
     overflowX: 'hidden' as const,
     minHeight: 0,
+    background: 'rgba(255,252,245,0.55)',
   },
   row: {
     display: 'flex',
     alignItems: 'center' as const,
     gap: '6px',
-    padding: '4px 10px',
-    borderBottom: '1px solid rgba(0,0,0,0.08)',
+    padding: '4px 12px',
+    borderBottom: '1px solid rgba(0,0,0,0.05)',
     cursor: 'pointer',
     height: '48px',
     boxSizing: 'border-box' as const,
   },
   caughtDot: {
     fontSize: '10px',
-    color: '#111111',
     width: '14px',
     textAlign: 'center' as const,
     flexShrink: 0,

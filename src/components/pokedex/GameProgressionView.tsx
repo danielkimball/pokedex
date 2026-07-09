@@ -331,13 +331,13 @@ const s = {
   wrap: { display: 'flex', flexDirection: 'column' as const, flex: 1, minHeight: 0 },
   empty: { padding: '12px', fontSize: '12px', color: '#5d5142' },
   banner: {
-    padding: '4px 8px 5px',
-    borderBottom: '1px solid #11111122',
-    background: 'rgba(255,250,240,0.9)',
+    padding: '6px 10px 8px',
+    borderBottom: '1px solid rgba(0,0,0,0.08)',
+    background: 'rgba(255,252,245,0.95)',
     flexShrink: 0,
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: '4px',
+    gap: '6px',
   },
   badgeStrip: {
     display: 'flex', gap: '2px', flexWrap: 'wrap' as const, alignItems: 'center' as const,
