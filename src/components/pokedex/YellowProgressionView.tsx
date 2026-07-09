@@ -1,7 +1,7 @@
 /**
  * Story-order catch guide for Pokémon Yellow.
  * Groups species by city / route / dungeon as you progress, gated by badges
- * read from the selected (or best-matching Yellow) save.
+ * and tools (rods, Surf, Poké Flute…) from the selected Yellow save.
  */
 
 import { useMemo, useCallback, useState } from 'react';
@@ -13,13 +13,18 @@ import {
   YELLOW_BADGES,
   hasBadge,
   countBadges,
-  yellowSpeciesUpToBadges,
+  yellowSpeciesAvailableNow,
+  mergeTools,
+  encounterAvailable,
+  TOOL_LABEL,
   type ProgressionArea,
   type ProgressionEncounter,
   type EncounterMethod,
+  type ProgressionReq,
+  type PlayerProgress,
 } from '../../core/constants/progression-yellow';
 import type { SaveRecord } from '../../db/schema';
-import { readGen1Badges } from '../../core/parser/gen1-parser';
+import { readGen1Badges, readGen1KeyTools } from '../../core/parser/gen1-parser';
 
 const SPRITE_URL = (n: number) => defaultSpriteUrl(n);
 
@@ -36,7 +41,6 @@ const METHOD_LABEL: Record<EncounterMethod, string> = {
   unavailable: 'N/A',
 };
 
-/** Emblem colors loosely matching classic Gen 1 badge hues. */
 const BADGE_COLORS: Record<string, string> = {
   boulder: '#8B7355',
   cascade: '#4A90D9',
@@ -50,17 +54,32 @@ const BADGE_COLORS: Record<string, string> = {
 
 export interface YellowProgressionViewProps {
   caughtSet: Set<number>;
-  /** Preferred save for badge reading (dexSaveId focus). */
   focusedSave: SaveRecord | null;
-  /** All saves — used to auto-pick a Yellow save when none focused. */
   saves: SaveRecord[];
   searchQuery: string;
   show: 'all' | 'caught' | 'uncaught';
 }
 
-function resolveBadges(focused: SaveRecord | null, saves: SaveRecord[]): {
-  badges: number;
+function toolsFromBag(raw: ArrayBuffer | undefined): ProgressionReq[] {
+  if (!raw) return [];
+  try {
+    const k = readGen1KeyTools(raw);
+    const t: ProgressionReq[] = [];
+    if (k.oldRod) t.push('old-rod');
+    if (k.goodRod) t.push('good-rod');
+    if (k.superRod) t.push('super-rod');
+    if (k.pokeFlute) t.push('poke-flute');
+    if (k.silphScope) t.push('silph-scope');
+    return t;
+  } catch {
+    return [];
+  }
+}
+
+function resolveProgress(focused: SaveRecord | null, saves: SaveRecord[]): {
+  progress: PlayerProgress;
   source: SaveRecord | null;
+  bagTools: ProgressionReq[];
 } {
   const yellowSaves = saves.filter(
     s => s.game === 'Yellow' || (s.generation === 1 && /yellow/i.test(s.filename)),
@@ -70,20 +89,24 @@ function resolveBadges(focused: SaveRecord | null, saves: SaveRecord[]): {
       ? focused
       : yellowSaves[0] ?? null;
 
-  if (!pick) return { badges: 0, source: null };
+  if (!pick) {
+    return {
+      progress: { badges: 0, tools: mergeTools(0, []) },
+      source: null,
+      bagTools: [],
+    };
+  }
 
-  if (typeof pick.badges === 'number') {
-    return { badges: pick.badges, source: pick };
+  let badges = typeof pick.badges === 'number' ? pick.badges : 0;
+  if (typeof pick.badges !== 'number' && pick.rawData) {
+    try { badges = readGen1Badges(pick.rawData); } catch { /* keep 0 */ }
   }
-  // Re-import not done yet — parse raw save if present.
-  if (pick.rawData) {
-    try {
-      return { badges: readGen1Badges(pick.rawData), source: pick };
-    } catch {
-      return { badges: 0, source: pick };
-    }
-  }
-  return { badges: 0, source: pick };
+  const bagTools = toolsFromBag(pick.rawData);
+  return {
+    progress: { badges, tools: mergeTools(badges, bagTools) },
+    source: pick,
+    bagTools,
+  };
 }
 
 function encounterMatchesShow(
@@ -98,21 +121,31 @@ function encounterMatchesShow(
 }
 
 function filterEncounters(
+  area: ProgressionArea,
   encounters: ProgressionEncounter[],
   query: string,
   caughtSet: Set<number>,
   show: 'all' | 'caught' | 'uncaught',
   firstOnly: boolean,
+  progress: PlayerProgress,
+  /** When false, hide encounters the player cannot do yet. */
+  showGated: boolean,
 ): ProgressionEncounter[] {
   const q = query.toLowerCase().trim();
   return encounters.filter(e => {
-    if (firstOnly && !e.firstHere) return false;
+    if (firstOnly && !e.firstHere && area.id !== 'unavailable') return false;
     if (!encounterMatchesShow(e.species, caughtSet, show)) return false;
+    const open = encounterAvailable(area, e, progress) || e.method === 'unavailable';
+    if (!open && !showGated && e.method !== 'unavailable') return false;
     if (!q) return true;
     const name = (SPECIES[e.species] || '').toLowerCase();
     const num = String(e.species).padStart(3, '0');
     return name.includes(q) || num.includes(q) || String(e.species) === q;
   });
+}
+
+function missingReqs(enc: ProgressionEncounter, progress: PlayerProgress): ProgressionReq[] {
+  return (enc.requires ?? []).filter(r => !progress.tools.has(r));
 }
 
 export function YellowProgressionView({
@@ -124,18 +157,20 @@ export function YellowProgressionView({
 }: YellowProgressionViewProps) {
   const navigate = useNavigate();
   const [showLocked, setShowLocked] = useState(false);
-  const [showMeta, setShowMeta] = useState(true);
+  const [showMeta, setShowMeta] = useState(false);
   const [firstOnly, setFirstOnly] = useState(true);
+  /** Show encounters that need tools you don't have yet (dimmed). */
+  const [showGated, setShowGated] = useState(false);
 
-  const { badges, source } = useMemo(
-    () => resolveBadges(focusedSave, saves),
+  const { progress, source, bagTools } = useMemo(
+    () => resolveProgress(focusedSave, saves),
     [focusedSave, saves],
   );
-  const badgeCount = countBadges(badges);
+  const badgeCount = countBadges(progress.badges);
 
   const availableSet = useMemo(
-    () => yellowSpeciesUpToBadges(badgeCount, false),
-    [badgeCount],
+    () => yellowSpeciesAvailableNow(progress, false),
+    [progress],
   );
 
   const progressStats = useMemo(() => {
@@ -167,29 +202,40 @@ export function YellowProgressionView({
     navigate(`/dex/${dexNum}`);
   }, [navigate]);
 
-  const renderArea = (area: ProgressionArea, locked: boolean) => {
+  const ownedToolLabels = useMemo(() => {
+    const labels: string[] = [];
+    for (const r of ['old-rod', 'good-rod', 'super-rod', 'poke-flute', 'silph-scope', 'cut', 'surf'] as ProgressionReq[]) {
+      if (progress.tools.has(r)) labels.push(TOOL_LABEL[r]);
+    }
+    return labels;
+  }, [progress]);
+
+  const renderArea = (area: ProgressionArea, areaLocked: boolean) => {
     const visible = filterEncounters(
+      area,
       area.encounters,
       searchQuery,
       caughtSet,
       show,
       firstOnly && area.id !== 'unavailable',
+      progress,
+      showGated || area.id === 'unavailable',
     );
     if (visible.length === 0 && searchQuery) return null;
-    // Hide empty locked areas when not searching
-    if (visible.length === 0 && locked) return null;
+    if (visible.length === 0 && areaLocked) return null;
 
+    // Progress for this area: firstHere encounters that are currently open
     const firsts = area.encounters.filter(e => e.firstHere);
-    const caughtInArea = firsts.filter(e => caughtSet.has(e.species)).length;
-    const totalFirst = firsts.length;
+    const openFirsts = firsts.filter(e => encounterAvailable(area, e, progress));
+    const caughtOpen = openFirsts.filter(e => caughtSet.has(e.species)).length;
     const gym = area.gymBadge != null ? YELLOW_BADGES[area.gymBadge] : null;
-    const earnedGym = gym ? hasBadge(badges, gym.index) : false;
+    const earnedGym = gym ? hasBadge(progress.badges, gym.index) : false;
 
     return (
-      <section key={area.id} style={{ ...s.section, opacity: locked ? 0.45 : 1 }}>
+      <section key={area.id} style={{ ...s.section, opacity: areaLocked ? 0.45 : 1 }}>
         <header style={s.sectionHeader}>
           <div style={s.sectionTitleRow}>
-            {locked && <span style={s.lockIcon} title={`Needs ${area.minBadges} badges`}>[L]</span>}
+            {areaLocked && <span style={s.lockIcon} title={`Needs ${area.minBadges} badges`}>[L]</span>}
             <span style={s.sectionName}>{area.name}</span>
             {gym && (
               <span
@@ -209,25 +255,34 @@ export function YellowProgressionView({
             )}
           </div>
           <span style={s.sectionMeta}>
-            {totalFirst > 0 ? `${caughtInArea}/${totalFirst}` : '—'}
-            {area.minBadges > 0 && locked ? ` · ${area.minBadges}+ badges` : ''}
+            {openFirsts.length > 0 ? `${caughtOpen}/${openFirsts.length}` : firsts.length === 0 ? '—' : '0 open'}
+            {area.minBadges > 0 && areaLocked ? ` · ${area.minBadges}+ badges` : ''}
           </span>
         </header>
 
         {visible.length === 0 ? (
           <div style={s.emptyArea}>
-            {totalFirst === 0 ? 'No wild encounters' : show === 'caught' ? 'None caught here yet' : 'All caught!'}
+            {firsts.length === 0
+              ? 'No encounters listed'
+              : openFirsts.length === 0
+                ? 'Nothing catchable here yet (need a rod / HM / etc.)'
+                : show === 'caught'
+                  ? 'None caught here yet'
+                  : 'All caught!'}
           </div>
         ) : (
           visible.map(e => {
             const name = SPECIES[e.species] || '???';
             const isCaught = caughtSet.has(e.species);
+            const open = encounterAvailable(area, e, progress) || e.method === 'unavailable';
+            const missing = missingReqs(e, progress);
             return (
               <div
                 key={`${area.id}-${e.species}-${e.method}`}
                 style={{
                   ...s.row,
                   background: isCaught ? 'rgba(40,120,64,0.08)' : 'transparent',
+                  opacity: open ? 1 : 0.4,
                 }}
                 onClick={() => handleRowClick(e.species)}
               >
@@ -243,7 +298,13 @@ export function YellowProgressionView({
                   <span style={s.name}>{name}</span>
                   <span style={s.methodRow}>
                     <span style={s.methodChip}>{METHOD_LABEL[e.method]}</span>
-                    {e.note && <span style={s.note}>{e.note}</span>}
+                    {missing.map(r => (
+                      <span key={r} style={s.needChip}>needs {TOOL_LABEL[r]}</span>
+                    ))}
+                    {e.note && open && <span style={s.note}>{e.note}</span>}
+                    {!open && e.note && missing.length === 0 && (
+                      <span style={s.note}>{e.note}</span>
+                    )}
                   </span>
                 </div>
               </div>
@@ -256,39 +317,43 @@ export function YellowProgressionView({
 
   const latestBadge = useMemo(() => {
     for (let i = 7; i >= 0; i--) {
-      if (hasBadge(badges, i)) return YELLOW_BADGES[i];
+      if (hasBadge(progress.badges, i)) return YELLOW_BADGES[i];
     }
     return null;
-  }, [badges]);
+  }, [progress.badges]);
 
   return (
     <div style={s.wrap}>
-      {/* Progress banner */}
       <div style={s.banner}>
         <div style={s.bannerTop}>
-          <strong style={s.bannerTitle}>Yellow · Story order</strong>
+          <strong style={s.bannerTitle}>Yellow · Catch as you go</strong>
           <span style={s.bannerCount}>
-            {progressStats.caughtAvailable}/{progressStats.available} available
+            {progressStats.caughtAvailable}/{progressStats.available} open now
           </span>
         </div>
         <div style={s.bannerSub}>
           {source ? (
             <>
-              Reading badges from <strong>{source.trainerName || '???'}</strong>
+              Save: <strong>{source.trainerName || '???'}</strong>
               {latestBadge
-                ? <> · latest: <strong>{latestBadge.name}</strong></>
+                ? <> · latest badge: <strong>{latestBadge.name}</strong></>
                 : ' · no badges yet'}
               {' · '}{badgeCount}/8
+              {bagTools.length > 0 && (
+                <> · bag: {bagTools.map(t => TOOL_LABEL[t]).join(', ')}</>
+              )}
+              {ownedToolLabels.length > 0 && bagTools.length === 0 && (
+                <> · tools (inferred): {ownedToolLabels.join(', ')}</>
+              )}
             </>
           ) : (
-            <>No Yellow save imported — showing full guide (0 badges). Import a Yellow .sav to track progress.</>
+            <>No Yellow save — showing start-of-game (0 badges, no rods). Import a Yellow .sav to track live progress.</>
           )}
         </div>
 
-        {/* Badge strip */}
         <div style={s.badgeStrip}>
           {YELLOW_BADGES.map(b => {
-            const earned = hasBadge(badges, b.index);
+            const earned = hasBadge(progress.badges, b.index);
             return (
               <div
                 key={b.index}
@@ -307,10 +372,10 @@ export function YellowProgressionView({
         </div>
 
         {progressStats.missingAvailable === 0 && progressStats.available > 0 ? (
-          <div style={s.greatLine}>Great — you&apos;ve caught everything available up to this point!</div>
+          <div style={s.greatLine}>Great — you&apos;ve caught everything you can right now!</div>
         ) : (
           <div style={s.missingLine}>
-            {progressStats.missingAvailable} still missing before your current badge gate
+            {progressStats.missingAvailable} still catchable before your next badge/tool unlock
           </div>
         )}
 
@@ -324,6 +389,13 @@ export function YellowProgressionView({
           </button>
           <button
             type="button"
+            style={showGated ? s.toggleOn : s.toggleOff}
+            onClick={() => setShowGated(v => !v)}
+          >
+            Need rod/HM
+          </button>
+          <button
+            type="button"
             style={showMeta ? s.toggleOn : s.toggleOff}
             onClick={() => setShowMeta(v => !v)}
           >
@@ -334,7 +406,7 @@ export function YellowProgressionView({
             style={firstOnly ? s.toggleOn : s.toggleOff}
             onClick={() => setFirstOnly(v => !v)}
           >
-            First location only
+            Best first spot only
           </button>
         </div>
       </div>
@@ -465,6 +537,7 @@ const s = {
   },
   lockIcon: {
     fontSize: '10px',
+    color: '#5d5142',
   },
   sectionName: {
     fontSize: '11px',
@@ -547,11 +620,20 @@ const s = {
     alignItems: 'center' as const,
     gap: '4px',
     minWidth: 0,
+    flexWrap: 'wrap' as const,
   },
   methodChip: {
     fontSize: '9px',
     color: '#5d5142',
     background: 'rgba(0,0,0,0.06)',
+    borderRadius: '6px',
+    padding: '0 5px',
+    flexShrink: 0,
+  },
+  needChip: {
+    fontSize: '9px',
+    color: '#8a4020',
+    background: 'rgba(200,80,20,0.12)',
     borderRadius: '6px',
     padding: '0 5px',
     flexShrink: 0,

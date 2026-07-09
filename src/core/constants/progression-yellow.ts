@@ -1,12 +1,16 @@
 /**
  * Pokémon Yellow story-order catch progression.
  *
- * Areas are ordered roughly as a player first reaches them. Each encounter is
- * tagged with a method (wild/gift/static/fish/…). `firstHere` is true when this
- * is the earliest place the species becomes obtainable in Yellow.
+ * Encounters can require tools/HMs (`requires`). `firstHere` is the earliest
+ * place you can ACTUALLY obtain the species (area reached + tools unlocked),
+ * so Super Rod mons do not appear as "catchable" in Pallet at game start.
  *
- * minBadges: badges typically owned before first access (story gate).
- * gymBadge: 0-7 if this settlement awards that gym badge.
+ * Tool unlock order (Yellow):
+ *   Old Rod → Vermilion
+ *   Poké Flute → after Pokémon Tower
+ *   Super Rod → Route 12 (Silence Bridge Fishing Guru)
+ *   Good Rod → Fuchsia
+ *   Surf → after Soul Badge (then water routes)
  *
  * Wild tables sourced from pret/pokeyellow data/wild/maps.
  */
@@ -23,20 +27,30 @@ export type EncounterMethod =
   | 'evolve'
   | 'unavailable';
 
+/** Story tools / field moves that gate encounters. */
+export type ProgressionReq =
+  | 'old-rod'
+  | 'good-rod'
+  | 'super-rod'
+  | 'surf'
+  | 'cut'
+  | 'poke-flute'
+  | 'silph-scope';
+
 export interface ProgressionEncounter {
   species: number;
   method: EncounterMethod;
   note?: string;
-  /** True if this is the earliest area the species appears in the progression. */
+  /** True if this is the earliest feasible obtain location. */
   firstHere: boolean;
+  /** Tools/HMs required beyond simply being in this area. */
+  requires?: ProgressionReq[];
 }
 
 export interface ProgressionArea {
   id: string;
   name: string;
-  /** Minimum gym badges typically required to reach this area. */
   minBadges: number;
-  /** Gym badge index awarded here (0=Boulder … 7=Earth), if any. */
   gymBadge: number | null;
   encounters: ProgressionEncounter[];
 }
@@ -47,13 +61,10 @@ export interface GymBadgeInfo {
   name: string;
   city: string;
   leader: string;
-  /** Short emblem glyph for the UI. */
   emblem: string;
-  /** HM / field move this badge unlocks in Gen 1, if any. */
   unlocks?: string;
 }
 
-/** Gen 1 badge bitfield: bit 0 = Boulder … bit 7 = Earth (pret/pokered). */
 export const YELLOW_BADGES: GymBadgeInfo[] = [
   { index: 0, bit: 0, name: 'Boulder Badge', city: 'Pewter City', leader: 'Brock', emblem: 'boulder', unlocks: 'Flash' },
   { index: 1, bit: 1, name: 'Cascade Badge', city: 'Cerulean City', leader: 'Misty', emblem: 'cascade', unlocks: 'Cut' },
@@ -81,8 +92,89 @@ export function highestBadgeIndex(badges: number): number {
   return hi;
 }
 
-export const YELLOW_PROGRESSION: ProgressionArea[] = [
+/** Area id where each tool first becomes available in a normal Yellow playthrough. */
+export const TOOL_UNLOCK_AREA: Record<ProgressionReq, string> = {
+  'old-rod': 'vermilion',
+  'cut': 'vermilion',
+  'silph-scope': 'pokemon-tower',
+  'poke-flute': 'pokemon-tower',
+  'super-rod': 'route12',
+  'good-rod': 'fuchsia',
+  'surf': 'route19',
+};
 
+export const TOOL_LABEL: Record<ProgressionReq, string> = {
+  'old-rod': 'Old Rod',
+  'good-rod': 'Good Rod',
+  'super-rod': 'Super Rod',
+  'surf': 'Surf',
+  'cut': 'Cut',
+  'poke-flute': 'Poké Flute',
+  'silph-scope': 'Silph Scope',
+};
+
+/** Gen 1 item IDs for key tools (English R/B/Y). */
+export const GEN1_TOOL_ITEM_IDS: Record<ProgressionReq, number | null> = {
+  'old-rod': 0x4c,
+  'good-rod': 0x4d,
+  'super-rod': 0x4e,
+  'poke-flute': 0x49,
+  'silph-scope': 0x48,
+  'surf': null, // HM, inferred from Soul Badge
+  'cut': null,  // HM, inferred from Cascade Badge
+};
+
+export interface PlayerProgress {
+  badges: number;
+  /** Tools the player currently has (from save bag and/or badge inference). */
+  tools: Set<ProgressionReq>;
+}
+
+/** Infer tools from badge count when bag data is missing (story approximation). */
+export function inferToolsFromBadges(badgeCount: number): Set<ProgressionReq> {
+  const t = new Set<ProgressionReq>();
+  if (badgeCount >= 1) { /* Cascade often paired with Cut after Anne */ }
+  if (badgeCount >= 2) {
+    t.add('old-rod');
+    t.add('cut');
+  }
+  if (badgeCount >= 4) {
+    t.add('poke-flute');
+    t.add('silph-scope');
+    t.add('super-rod');
+    t.add('good-rod');
+  }
+  if (badgeCount >= 5) {
+    t.add('surf');
+  }
+  return t;
+}
+
+export function mergeTools(badges: number, fromBag: Iterable<ProgressionReq> = []): Set<ProgressionReq> {
+  const t = inferToolsFromBadges(countBadges(badges));
+  // Bag is authoritative for rods / flute / scope when present
+  for (const r of fromBag) t.add(r);
+  // HM usage still badge-gated in Gen 1
+  if (!hasBadge(badges, 1)) t.delete('cut');
+  if (!hasBadge(badges, 4)) t.delete('surf');
+  return t;
+}
+
+export function encounterAvailable(
+  area: ProgressionArea,
+  enc: ProgressionEncounter,
+  progress: PlayerProgress,
+): boolean {
+  if (enc.method === 'unavailable') return false;
+  const badgeCount = countBadges(progress.badges);
+  if (area.minBadges > badgeCount) return false;
+  for (const r of enc.requires ?? []) {
+    if (!progress.tools.has(r)) return false;
+  }
+  return true;
+}
+
+export const YELLOW_PROGRESSION: ProgressionArea[] = [
   {
     id: "pallet",
     name: "Pallet Town",
@@ -90,8 +182,8 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
     gymBadge: null,
     encounters: [
       { species: 25, method: "gift", firstHere: true, note: "Starter from Prof. Oak" },
-      { species: 72, method: "fish", firstHere: true, note: "Super Rod (surf)" },
-      { species: 120, method: "fish", firstHere: true, note: "Super Rod (surf)" },
+      { species: 72, method: "fish", firstHere: false, note: "Super Rod \u2014 optional return (first Tentacool is Vermilion dock after Super Rod)", requires: ["super-rod"] },
+      { species: 120, method: "fish", firstHere: false, note: "Super Rod \u2014 optional return (first Staryu is Vermilion dock after Super Rod)", requires: ["super-rod"] },
     ],
   },
   {
@@ -110,7 +202,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
     minBadges: 0,
     gymBadge: null,
     encounters: [
-      { species: 60, method: "fish", firstHere: true, note: "Good Rod / Super Rod" },
+      { species: 60, method: "fish", firstHere: false, note: "Super Rod (pond) \u2014 optional return after Route 12", requires: ["super-rod"] },
     ],
   },
   {
@@ -124,8 +216,8 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 29, method: "wild", firstHere: true },
       { species: 32, method: "wild", firstHere: true },
       { species: 56, method: "wild", firstHere: true },
-      { species: 60, method: "fish", firstHere: false, note: "Super Rod" },
-      { species: 61, method: "fish", firstHere: true, note: "Super Rod" },
+      { species: 60, method: "fish", firstHere: true, note: "Super Rod", requires: ["super-rod"] },
+      { species: 61, method: "fish", firstHere: true, note: "Super Rod", requires: ["super-rod"] },
     ],
   },
   {
@@ -159,7 +251,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
     minBadges: 0,
     gymBadge: 0,
     encounters: [
-      { species: 142, method: "fossil", firstHere: true, note: "Old Amber in Museum (needs Cut) \u2192 revive at Cinnabar" },
+      { species: 142, method: "fossil", firstHere: true, note: "Old Amber in Museum (needs Cut) \u2192 revive at Cinnabar", requires: ["cut"] },
     ],
   },
   {
@@ -199,9 +291,9 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 21, method: "wild", firstHere: false },
       { species: 27, method: "wild", firstHere: false },
       { species: 56, method: "wild", firstHere: false },
-      { species: 118, method: "fish", firstHere: true, note: "Super Rod" },
-      { species: 119, method: "fish", firstHere: true, note: "Super Rod" },
-      { species: 129, method: "gift", firstHere: true, note: "Magikarp salesman ($500)" },
+      { species: 118, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
+      { species: 119, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
+      { species: 129, method: "gift", firstHere: true, note: "Magikarp salesman ($500) \u2014 no rod needed" },
     ],
   },
   {
@@ -211,8 +303,8 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
     gymBadge: 1,
     encounters: [
       { species: 1, method: "gift", firstHere: true, note: "Bulbasaur from girl (high Pikachu happiness, after Cascade)" },
-      { species: 118, method: "fish", firstHere: false, note: "Super Rod" },
-      { species: 119, method: "fish", firstHere: false, note: "Super Rod" },
+      { species: 118, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
+      { species: 119, method: "fish", firstHere: true, note: "Super Rod", requires: ["super-rod"] },
     ],
   },
   {
@@ -227,7 +319,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 43, method: "wild", firstHere: true },
       { species: 48, method: "wild", firstHere: true },
       { species: 69, method: "wild", firstHere: true },
-      { species: 118, method: "fish", firstHere: false, note: "Super Rod" },
+      { species: 118, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
     ],
   },
   {
@@ -241,8 +333,8 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 43, method: "wild", firstHere: false },
       { species: 48, method: "wild", firstHere: false },
       { species: 69, method: "wild", firstHere: false },
-      { species: 98, method: "fish", firstHere: true, note: "Super Rod" },
-      { species: 99, method: "fish", firstHere: true, note: "Super Rod" },
+      { species: 98, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
+      { species: 99, method: "fish", firstHere: true, note: "Super Rod", requires: ["super-rod"] },
     ],
   },
   {
@@ -272,7 +364,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 54, method: "wild", firstHere: true },
       { species: 55, method: "wild", firstHere: true },
       { species: 63, method: "wild", firstHere: false },
-      { species: 118, method: "fish", firstHere: false, note: "Super Rod" },
+      { species: 118, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
     ],
   },
   {
@@ -282,10 +374,11 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
     gymBadge: 2,
     encounters: [
       { species: 7, method: "gift", firstHere: true, note: "Squirtle from Officer Jenny after SS Anne" },
-      { species: 72, method: "fish", firstHere: false, note: "Super Rod / dock" },
-      { species: 90, method: "fish", firstHere: true, note: "Super Rod (dock)" },
-      { species: 116, method: "fish", firstHere: true, note: "Super Rod" },
-      { species: 120, method: "fish", firstHere: false, note: "Super Rod (dock)" },
+      { species: 72, method: "fish", firstHere: false, note: "Super Rod at dock \u2014 best first Tentacool once you have Super Rod (Fly back)", requires: ["super-rod"] },
+      { species: 90, method: "fish", firstHere: true, note: "Super Rod (dock) \u2014 best first Shellder after Super Rod", requires: ["super-rod"] },
+      { species: 116, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
+      { species: 120, method: "fish", firstHere: true, note: "Super Rod (dock) \u2014 best first Staryu after Super Rod", requires: ["super-rod"] },
+      { species: 129, method: "fish", firstHere: false, note: "Old Rod (only Magikarp)", requires: ["old-rod"] },
     ],
   },
   {
@@ -309,7 +402,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 19, method: "wild", firstHere: false },
       { species: 20, method: "wild", firstHere: true },
       { species: 51, method: "trade", firstHere: false, note: "In-game trade: give Lickitung, get Dugtrio" },
-      { species: 72, method: "fish", firstHere: false, note: "Super Rod" },
+      { species: 72, method: "fish", firstHere: true, note: "Super Rod", requires: ["super-rod"] },
       { species: 96, method: "wild", firstHere: true },
     ],
   },
@@ -341,8 +434,8 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 32, method: "wild", firstHere: false },
       { species: 66, method: "wild", firstHere: true },
       { species: 81, method: "wild", firstHere: true },
-      { species: 98, method: "fish", firstHere: false, note: "Super Rod" },
-      { species: 116, method: "fish", firstHere: false, note: "Super Rod" },
+      { species: 98, method: "fish", firstHere: true, note: "Super Rod", requires: ["super-rod"] },
+      { species: 116, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
     ],
   },
   {
@@ -402,7 +495,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 33, method: "prize", firstHere: false, note: "Game Corner \u2014 Nidorino" },
       { species: 35, method: "prize", firstHere: false, note: "Game Corner coins" },
       { species: 63, method: "prize", firstHere: false, note: "Game Corner coins" },
-      { species: 118, method: "fish", firstHere: false, note: "Super Rod (pond)" },
+      { species: 118, method: "fish", firstHere: true, note: "Super Rod (pond)", requires: ["super-rod"] },
       { species: 123, method: "prize", firstHere: true, note: "Game Corner \u2014 Scyther" },
       { species: 127, method: "prize", firstHere: true, note: "Game Corner \u2014 Pinsir" },
       { species: 133, method: "gift", firstHere: true, note: "Eevee \u2014 Celadon Mansion roof" },
@@ -436,9 +529,9 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 79, method: "wild", firstHere: true },
       { species: 80, method: "wild", firstHere: true },
       { species: 83, method: "wild", firstHere: true },
-      { species: 116, method: "fish", firstHere: false, note: "Super Rod" },
-      { species: 117, method: "fish", firstHere: true, note: "Super Rod" },
-      { species: 143, method: "static", firstHere: true, note: "Snorlax (Pok\u00e9 Flute)" },
+      { species: 116, method: "fish", firstHere: true, note: "Super Rod \u2014 Fishing Guru gives Super Rod HERE; fish immediately for Horsea/Seadra", requires: ["super-rod"] },
+      { species: 117, method: "fish", firstHere: true, note: "Super Rod \u2014 fish here right after getting the rod", requires: ["super-rod"] },
+      { species: 143, method: "static", firstHere: true, note: "Snorlax (Pok\u00e9 Flute)", requires: ["poke-flute"] },
     ],
   },
   {
@@ -456,7 +549,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 79, method: "wild", firstHere: false },
       { species: 80, method: "wild", firstHere: false },
       { species: 83, method: "wild", firstHere: false },
-      { species: 116, method: "fish", firstHere: false, note: "Super Rod" },
+      { species: 116, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
     ],
   },
   {
@@ -495,8 +588,10 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
     minBadges: 4,
     gymBadge: 4,
     encounters: [
-      { species: 129, method: "fish", firstHere: false, note: "Super Rod" },
-      { species: 130, method: "fish", firstHere: true, note: "Super Rod (rare)" },
+      { species: 60, method: "fish", firstHere: false, note: "Good Rod (pond) \u2014 Fishing Guru in town", requires: ["good-rod"] },
+      { species: 118, method: "fish", firstHere: false, note: "Good Rod (pond)", requires: ["good-rod"] },
+      { species: 129, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
+      { species: 130, method: "fish", firstHere: true, note: "Super Rod (rare)", requires: ["super-rod"] },
     ],
   },
   {
@@ -521,9 +616,9 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 123, method: "wild", firstHere: false },
       { species: 127, method: "wild", firstHere: false },
       { species: 128, method: "wild", firstHere: true },
-      { species: 129, method: "fish", firstHere: false, note: "Super Rod" },
-      { species: 147, method: "fish", firstHere: false, note: "Super Rod \u2014 Dratini" },
-      { species: 148, method: "fish", firstHere: true, note: "Super Rod \u2014 Dragonair" },
+      { species: 129, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
+      { species: 147, method: "fish", firstHere: false, note: "Super Rod \u2014 Dratini", requires: ["super-rod"] },
+      { species: 148, method: "fish", firstHere: true, note: "Super Rod \u2014 Dragonair", requires: ["super-rod"] },
     ],
   },
   {
@@ -537,7 +632,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 21, method: "wild", firstHere: false },
       { species: 22, method: "wild", firstHere: false },
       { species: 84, method: "wild", firstHere: true },
-      { species: 143, method: "static", firstHere: false, note: "Snorlax (Pok\u00e9 Flute)" },
+      { species: 143, method: "static", firstHere: false, note: "Snorlax (Pok\u00e9 Flute)", requires: ["poke-flute"] },
     ],
   },
   {
@@ -547,11 +642,11 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
     gymBadge: null,
     encounters: [
       { species: 22, method: "wild", firstHere: false },
-      { species: 72, method: "fish", firstHere: false, note: "Super Rod" },
+      { species: 72, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
       { species: 77, method: "wild", firstHere: true },
       { species: 84, method: "wild", firstHere: false },
       { species: 85, method: "wild", firstHere: true },
-      { species: 90, method: "fish", firstHere: false, note: "Super Rod" },
+      { species: 90, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
     ],
   },
   {
@@ -566,7 +661,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 22, method: "wild", firstHere: false },
       { species: 47, method: "trade", firstHere: false, note: "In-game trade: give Tangela, get Parasect" },
       { species: 84, method: "wild", firstHere: false },
-      { species: 90, method: "fish", firstHere: false, note: "Super Rod" },
+      { species: 90, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
     ],
   },
   {
@@ -575,8 +670,8 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
     minBadges: 5,
     gymBadge: null,
     encounters: [
-      { species: 72, method: "wild", firstHere: false },
-      { species: 120, method: "fish", firstHere: false, note: "Super Rod" },
+      { species: 72, method: "wild", firstHere: false, requires: ["surf"] },
+      { species: 120, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod", "surf"] },
     ],
   },
   {
@@ -585,7 +680,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
     minBadges: 5,
     gymBadge: null,
     encounters: [
-      { species: 72, method: "wild", firstHere: false },
+      { species: 72, method: "wild", firstHere: false, requires: ["surf"] },
     ],
   },
   {
@@ -604,7 +699,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 98, method: "wild", firstHere: false },
       { species: 99, method: "wild", firstHere: false },
       { species: 120, method: "wild", firstHere: false },
-      { species: 144, method: "static", firstHere: true, note: "Articuno" },
+      { species: 144, method: "static", firstHere: true, note: "Articuno", requires: ["surf"] },
     ],
   },
   {
@@ -616,7 +711,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 87, method: "trade", firstHere: false, note: "In-game trade receives Dewgong" },
       { species: 89, method: "trade", firstHere: true, note: "In-game trade receives Muk" },
       { species: 112, method: "trade", firstHere: true, note: "In-game trade receives Rhydon" },
-      { species: 120, method: "fish", firstHere: false, note: "Super Rod" },
+      { species: 120, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
       { species: 138, method: "fossil", firstHere: false, note: "Revive Helix Fossil \u2192 Omanyte" },
       { species: 140, method: "fossil", firstHere: false, note: "Revive Dome Fossil \u2192 Kabuto" },
       { species: 142, method: "fossil", firstHere: false, note: "Revive Old Amber \u2192 Aerodactyl" },
@@ -660,7 +755,7 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 17, method: "wild", firstHere: false },
       { species: 19, method: "wild", firstHere: false },
       { species: 20, method: "wild", firstHere: false },
-      { species: 72, method: "wild", firstHere: false },
+      { species: 72, method: "wild", firstHere: false, requires: ["surf"] },
     ],
   },
   {
@@ -693,8 +788,8 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 33, method: "wild", firstHere: false },
       { species: 56, method: "wild", firstHere: false },
       { species: 57, method: "wild", firstHere: true },
-      { species: 60, method: "fish", firstHere: false, note: "Super Rod" },
-      { species: 61, method: "fish", firstHere: false, note: "Super Rod" },
+      { species: 60, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
+      { species: 61, method: "fish", firstHere: false, note: "Super Rod", requires: ["super-rod"] },
     ],
   },
   {
@@ -803,12 +898,19 @@ export const YELLOW_PROGRESSION: ProgressionArea[] = [
       { species: 124, method: "unavailable", firstHere: true, note: "Jynx \u2014 not in Yellow" },
       { species: 125, method: "unavailable", firstHere: true, note: "Electabuzz \u2014 not in Yellow (Red)" },
       { species: 126, method: "unavailable", firstHere: true, note: "Magmar \u2014 not in Yellow (Blue)" },
-      { species: 151, method: "unavailable", firstHere: true, note: "Mew \u2014 event only" },
+      { species: 151, method: "unavailable", firstHere: true, note: "Mew \u2014 event / glitch only" },
     ],
   },
 ];
+const EVO_REQUIRES_BASE: Record<number, number> = {
+  2: 1, 3: 1, 5: 4, 6: 4, 8: 7, 9: 7, 12: 10, 18: 16,
+  31: 29, 34: 32, 36: 35, 40: 39, 45: 43, 59: 58, 62: 60,
+  71: 69, 73: 72, 78: 77, 91: 90, 97: 96, 101: 100,
+  103: 102, 121: 120, 134: 133, 135: 133, 136: 133,
+  139: 138, 141: 140, 149: 147, 65: 63, 68: 66, 76: 74, 94: 92,
+};
 
-/** Unique species first-obtainable in pure Yellow (no link-trade exclusives). */
+/** Species first-obtainable in pure Yellow (no external trade exclusives). */
 export function yellowObtainableSpecies(includeTradeEvos = false): Set<number> {
   const set = new Set<number>();
   for (const area of YELLOW_PROGRESSION) {
@@ -823,42 +925,25 @@ export function yellowObtainableSpecies(includeTradeEvos = false): Set<number> {
 }
 
 /**
- * Pre-evolution / family roots used to gate stone/level evolutions against
- * whether the player has reached the base form yet.
- * Key = evolved species, value = earliest obtainable family member.
+ * Species you can obtain right now given badges + tools.
+ * Uses firstHere encounters that pass area + tool gates.
  */
-const EVO_REQUIRES_BASE: Record<number, number> = {
-  2: 1, 3: 1, // Ivysaur/Venusaur ← Bulbasaur
-  5: 4, 6: 4,
-  8: 7, 9: 7,
-  12: 10, // Butterfree ← Caterpie line
-  18: 16,
-  31: 29, 34: 32,
-  36: 35, 40: 39,
-  45: 43, 59: 58, 62: 60,
-  71: 69, 73: 72, 78: 77,
-  91: 90, 97: 96, 101: 100,
-  103: 102, 121: 120,
-  134: 133, 135: 133, 136: 133,
-  139: 138, 141: 140, 149: 147,
-  // trade evos
-  65: 63, 68: 66, 76: 74, 94: 92,
-};
-
-/** Species obtainable with the given badge count (story gate). */
-export function yellowSpeciesUpToBadges(badgeCount: number, includeTradeEvos = false): Set<number> {
+export function yellowSpeciesAvailableNow(
+  progress: PlayerProgress,
+  includeTradeEvos = false,
+): Set<number> {
   const set = new Set<number>();
-
   for (const area of YELLOW_PROGRESSION) {
     if (area.id === 'unavailable') continue;
+    if (area.id === 'trade-evos' && !includeTradeEvos) continue;
     if (area.id === 'evolutions' || area.id === 'trade-evos') continue;
-    if (area.minBadges > badgeCount) continue;
     for (const e of area.encounters) {
-      if (e.firstHere) set.add(e.species);
+      if (!e.firstHere) continue;
+      if (!encounterAvailable(area, e, progress)) continue;
+      set.add(e.species);
     }
   }
-
-  // Add level/stone evolutions only when the family base is already available.
+  // Evolutions once base is available
   for (const area of YELLOW_PROGRESSION) {
     if (area.id !== 'evolutions') continue;
     for (const e of area.encounters) {
@@ -867,7 +952,6 @@ export function yellowSpeciesUpToBadges(badgeCount: number, includeTradeEvos = f
       if (base == null || set.has(base)) set.add(e.species);
     }
   }
-
   if (includeTradeEvos) {
     for (const area of YELLOW_PROGRESSION) {
       if (area.id !== 'trade-evos') continue;
@@ -878,6 +962,16 @@ export function yellowSpeciesUpToBadges(badgeCount: number, includeTradeEvos = f
       }
     }
   }
-
   return set;
+}
+
+/** @deprecated Use yellowSpeciesAvailableNow with tools. Badge-only approximation. */
+export function yellowSpeciesUpToBadges(badgeCount: number, includeTradeEvos = false): Set<number> {
+  // Reconstruct a synthetic badge bitfield with `badgeCount` low bits set.
+  let bits = 0;
+  for (let i = 0; i < badgeCount && i < 8; i++) bits |= 1 << i;
+  return yellowSpeciesAvailableNow(
+    { badges: bits, tools: inferToolsFromBadges(badgeCount) },
+    includeTradeEvos,
+  );
 }

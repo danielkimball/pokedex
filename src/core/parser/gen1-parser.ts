@@ -170,3 +170,53 @@ export function readGen1Badges(data: Uint8Array | ArrayBuffer): number {
   if (bytes.length <= BADGES) return 0;
   return bytes[BADGES] ?? 0;
 }
+
+/** English R/B/Y bag: count @ 0x25C9, then (itemId, qty) pairs, terminated by 0xFF. */
+const BAG_COUNT = 0x25c9;
+const BAG_ITEMS = 0x25ca;
+const BAG_MAX_SLOTS = 20;
+
+/** Key item IDs used by the Yellow progression guide. */
+export const GEN1_ITEM = {
+  SILPH_SCOPE: 0x48,
+  POKE_FLUTE: 0x49,
+  OLD_ROD: 0x4c,
+  GOOD_ROD: 0x4d,
+  SUPER_ROD: 0x4e,
+} as const;
+
+/**
+ * Item ids currently in the player's bag (not PC). Empty array if buffer too short.
+ */
+export function readGen1BagItemIds(data: Uint8Array | ArrayBuffer): number[] {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  if (bytes.length < BAG_ITEMS + 2) return [];
+  const count = Math.min(bytes[BAG_COUNT] ?? 0, BAG_MAX_SLOTS);
+  const ids: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const id = bytes[BAG_ITEMS + i * 2];
+    if (id === 0xff || id === 0x00) break;
+    ids.push(id);
+  }
+  return ids;
+}
+
+export interface Gen1KeyTools {
+  oldRod: boolean;
+  goodRod: boolean;
+  superRod: boolean;
+  pokeFlute: boolean;
+  silphScope: boolean;
+}
+
+/** Which progression tools are present in the bag. */
+export function readGen1KeyTools(data: Uint8Array | ArrayBuffer): Gen1KeyTools {
+  const ids = new Set(readGen1BagItemIds(data));
+  return {
+    oldRod: ids.has(GEN1_ITEM.OLD_ROD),
+    goodRod: ids.has(GEN1_ITEM.GOOD_ROD),
+    superRod: ids.has(GEN1_ITEM.SUPER_ROD),
+    pokeFlute: ids.has(GEN1_ITEM.POKE_FLUTE),
+    silphScope: ids.has(GEN1_ITEM.SILPH_SCOPE),
+  };
+}
