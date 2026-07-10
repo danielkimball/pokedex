@@ -1,8 +1,8 @@
 /**
  * Multi-gen TCG-style card renderer.
  *
- * Composites a template (real PNG for Gen 1; a CSS-drawn placeholder frame for
- * Gen 2/3/4 until the user supplies real templates), the era illustration, and
+ * Composites a template (real PNG for Gen 1; HGSS real PNGs as they land;
+ * a CSS-drawn placeholder for remaining Gen 2/3/4), the era illustration, and
  * the Pokemon's real game data. Branches on `record.generation`:
  *   Gen 1   -> DV row only, no ability/held item/nature.
  *   Gen 2   -> DVs + held item (DVs are still Gen 2's IV equivalent).
@@ -49,6 +49,38 @@ const GEN4_ART_WINDOW = { left: 11.0, top: 13.5, width: 78.0, height: 36.0 };
  * landscape-oriented crop (~2.0:1 aspect). Box aspect ~2.0 matches.
  */
 const GEN2_ART_WINDOW = { left: 11.0, top: 16.0, width: 78.0, height: 28.0 };
+
+/** HeartGold / SoulSilver games that use the HGSS-era PNG templates. */
+const HGSS_GAMES = new Set(['HeartGold', 'SoulSilver']);
+
+/**
+ * HGSS Basic template art window (transparent hole in basic-fire.png).
+ * Measured on the 1062×1480 source after punching the white art rect.
+ */
+const HGSS_BASIC_ART_WINDOW = { left: 7.34, top: 10.34, width: 85.31, height: 42.03 };
+
+/**
+ * Resolve an HGSS real-PNG template if one exists for this stage + energy.
+ * Filenames: public/cards/gen4/templates/{basic|stage1|stage2}-{energy}.png
+ * Only basic-fire is shipped so far — everything else falls back to CSS.
+ */
+function resolveHgssTemplate(
+  game: string | null | undefined,
+  energyKey: string,
+  stage: string,
+): string | null {
+  if (!game || !HGSS_GAMES.has(game)) return null;
+  const stageKey =
+    stage === 'Basic' ? 'basic' :
+    stage === 'Stage 1' ? 'stage1' :
+    stage === 'Stage 2' ? 'stage2' : null;
+  if (!stageKey) return null;
+  // Expand this allow-list as new templates land on disk.
+  if (stageKey === 'basic' && energyKey === 'fire') {
+    return `/cards/gen4/templates/${stageKey}-${energyKey}.png`;
+  }
+  return null;
+}
 
 const energy = tcgEnergyUrl;
 
@@ -184,8 +216,186 @@ function CssTemplate({ energyKey, gen }: { energyKey: string; gen: number }) {
   );
 }
 
+/**
+ * HGSS-era real-PNG card (Basic Fire first; more templates as they land).
+ *
+ * Layer order matters: art sits UNDER the template so the baked-in BASIC badge
+ * and silver frame sit cleanly on top of the illustration. The pre-cropped
+ * gen4 art still includes a stage tab — we clip that top strip so it doesn't
+ * ghost under the template badge.
+ */
+function HgssTcgCard({
+  record,
+  templateUrl,
+}: {
+  record: PokemonRecord;
+  templateUrl: string;
+}) {
+  const gen = record.generation ?? 4;
+  const speciesName = SPECIES[record.species] ?? `#${record.species}`;
+  const title = record.nickname && record.nickname.toLowerCase() !== speciesName.toLowerCase()
+    ? record.nickname : speciesName;
+  const art = monCardArt(record) ?? monSpriteUrl(record);
+  const moves = record.moves.filter(Boolean).map(id => ({
+    name: MOVES[id] ?? `Move ${id}`,
+    pp: MOVE_PP[id],
+    type: MOVE_TYPE[id] ?? primaryType(record.species),
+  }));
+  const hp = approxHp(record.level);
+  const type = primaryType(record.species);
+  const weakness = WEAKNESS[type];
+  const game = record.game ?? 'HeartGold';
+  const dexMax = GEN_MAX_DEX[gen] ?? 493;
+  const dex3 = String(record.species).padStart(3, '0');
+  // Stacked lines so footer doesn't collide with the set logo.
+  const locationLines: string[] =
+    record.location === 'party' ? ['In Party']
+    : record.location === 'daycare' ? ['Day Care']
+    : [`Box ${record.containerIndex + 1}`, `Slot ${record.slotIndex + 1}`];
+  const natureName = NATURES[record.nature] ?? null;
+  const heldItemName = record.heldItem > 0 ? getItemName(record.heldItem) : null;
+
+  const ivCells: [string, number][] = [
+    ['HP', record.ivs.hp], ['ATK', record.ivs.atk], ['DEF', record.ivs.def],
+    ['SPA', record.ivs.spa], ['SPD', record.ivs.spd], ['SPE', record.ivs.spe],
+  ];
+  const evCells: [string, number][] = [
+    ['HP', record.evs.hp], ['ATK', record.evs.atk], ['DEF', record.evs.def],
+    ['SPA', record.evs.spa], ['SPD', record.evs.spd], ['SPE', record.evs.spe],
+  ];
+
+  const win = HGSS_BASIC_ART_WINDOW;
+
+  // Meta sits immediately after the name (same header band), not pushed right.
+  const metaBits = [
+    `Lv${record.level}`,
+    natureName,
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <div style={H.card}>
+      {/* Art under template. v6 crops already exclude the stage tab — cover fills
+          the hole edge-to-edge with no double-BASIC ghost. */}
+      <div
+        style={{
+          position: 'absolute',
+          left: `${win.left}%`,
+          top: `${win.top}%`,
+          width: `${win.width}%`,
+          height: `${win.height}%`,
+          overflow: 'hidden',
+          zIndex: 0,
+          background: '#f4f0e8',
+        }}
+      >
+        <img
+          src={art}
+          alt={speciesName}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'center center',
+          }}
+          onError={(e) => { e.currentTarget.src = defaultSpriteUrl(record.species); }}
+        />
+      </div>
+
+      <img src={templateUrl} alt="" style={{ ...S.template, zIndex: 1 }} aria-hidden />
+
+      {/* Name + Lv/nature inline (real card: name left; our meta trails the name). */}
+      <div style={H.nameRow}>
+        <span style={H.name}>
+          {title}{record.isShiny && <span style={S.shiny}> ★</span>}
+        </span>
+        {metaBits && <span style={H.meta}>{metaBits}</span>}
+      </div>
+
+      {/* Real HGSS: dark "HP60", vertically centered in the silver wedge by the energy. */}
+      <div style={H.hp}>
+        <span style={H.hpLbl}>HP</span>
+        <span style={H.hpNum}>{hp}</span>
+      </div>
+
+      {/* Trainer data centered ON the silver art-frame lip. */}
+      <div style={H.dataBar}>
+        OT: {record.otName || 'Unknown'}
+        {' · '}Game: {game}
+        {' · '}{dex3}/{dexMax}
+      </div>
+
+      {/* Attacks */}
+      <div style={H.attacks}>
+        {moves.map((mv, i) => (
+          <div key={i} style={H.atkRow}>
+            <img src={energy(mv.type)} alt="" style={H.atkIcon} />
+            <span style={H.atkName}>{mv.name}</span>
+            {mv.pp != null && (
+              <span style={H.atkPp}>
+                {mv.pp}<span style={H.atkPpLbl}>&nbsp;PP</span>
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* IVs / EVs — shared 6-column grid so ATK/DEF/… stay vertically aligned. */}
+      <div style={H.statBox}>
+        <div style={H.statGrid}>
+          <span style={H.statRowLabel}>IV</span>
+          {ivCells.map(([k, v]) => (
+            <span key={k} style={H.statCell}>
+              <span style={H.statKey}>{k}</span>
+              <span style={H.statVal}>{v}</span>
+            </span>
+          ))}
+        </div>
+        <div style={H.statGrid}>
+          <span style={H.statRowLabel}>EV</span>
+          {evCells.map(([k, v]) => (
+            <span key={k} style={H.statCell}>
+              <span style={H.statKey}>{k}</span>
+              <span style={H.statVal}>{v}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Held item centered in the Illus. silver pill. */}
+      <div style={H.heldPill}>
+        {heldItemName ? `Held: ${heldItemName}` : 'Held: —'}
+      </div>
+
+      {/* Footer: weakness left of location; location stacked to clear the set logo. */}
+      <div style={H.footerRow}>
+        <div style={H.weakness}>
+          <span style={H.infoLbl}>weakness</span>
+          {weakness
+            ? <img src={energy(weakness)} alt={weakness} style={H.infoIcon} />
+            : <span style={H.infoDash}>—</span>}
+        </div>
+        <div style={H.location}>
+          <span style={H.infoLbl}>location</span>
+          {locationLines.map((line) => (
+            <span key={line} style={H.locationLine}>{line}</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TcgCard({ record }: { record: PokemonRecord }) {
   const gen = record.generation ?? 1;
+  const energyKey = getTcgEnergy(record.species);
+  const stage = stageLabel(record.species, gen);
+  const hgssTpl = resolveHgssTemplate(record.game, energyKey, stage);
+  if (hgssTpl) {
+    return <HgssTcgCard record={record} templateUrl={hgssTpl} />;
+  }
+
   // Gen 4 stores the real ability id; Gen 3 stores only the slot index (needs a
   // species->abilities table to resolve). Gate to gen 4+ until that table lands.
   const showAbility = gen >= 4 && record.ability != null && record.ability > 0;
@@ -195,7 +405,6 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
 
   const dir = TEMPLATE_DIR[record.game ?? ''] ?? null;
   const usePng = dir !== null;
-  const energyKey = getTcgEnergy(record.species);
 
   const speciesName = SPECIES[record.species] ?? `#${record.species}`;
   const title = record.nickname && record.nickname.toLowerCase() !== speciesName.toLowerCase()
@@ -448,4 +657,132 @@ const S = {
   statCell: { display: 'flex', alignItems: 'baseline' as const, gap: '0.6cqw', minWidth: 0 },
   statKey: { fontSize: '1.6cqw', color: '#6a5a20', textTransform: 'uppercase' as const },
   statVal: { fontSize: '2.5cqw', fontWeight: 700 as const, color: INK },
+} as const;
+
+/** Layout tokens for HGSS real-PNG templates (Basic Fire measured on 1062×1480). */
+const H = {
+  // Clip to rounded card silhouette so residual corner pixels never show.
+  card: {
+    position: 'relative' as const, width: '100%', maxWidth: '330px',
+    aspectRatio: '720 / 990', margin: '0 auto',
+    containerType: 'inline-size' as const, fontFamily: FONT, userSelect: 'none' as const,
+    borderRadius: '3.6cqw', overflow: 'hidden' as const,
+    background: 'transparent',
+  },
+
+  // Name + Lv/nature — match real HGSS header: sits mid in the red banner
+  // (original Cyndaquil has more air above the name than we had at 2.0%).
+  nameRow: {
+    position: 'absolute' as const, top: '3.55%', left: '9%', right: '26%', height: '5.2%',
+    zIndex: 2, display: 'flex', alignItems: 'center' as const, gap: '1.6cqw',
+    minWidth: 0, overflow: 'hidden' as const,
+  },
+  name: {
+    fontSize: '5.5cqw', fontWeight: 700 as const, color: INK, lineHeight: 1.05,
+    whiteSpace: 'nowrap' as const, flexShrink: 0,
+  },
+  meta: {
+    fontSize: '2.2cqw', fontWeight: 600 as const, color: '#2a2218',
+    whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const,
+    minWidth: 0,
+  },
+  // Same vertical band as the name so HP tracks the real-card mid-banner line.
+  // right:15.8% → ~2% air before the energy (left edge ~86.4%).
+  hp: {
+    position: 'absolute' as const, top: '3.55%', right: '15.8%', height: '5.2%',
+    zIndex: 2, display: 'flex', alignItems: 'center' as const, justifyContent: 'flex-end' as const,
+    gap: 0,
+  },
+  hpLbl: {
+    fontSize: '2.2cqw', fontWeight: 700 as const, color: INK,
+    letterSpacing: '-0.05em', lineHeight: 1,
+    position: 'relative' as const, top: '0.15cqw',
+  },
+  hpNum: { fontSize: '4.9cqw', fontWeight: 700 as const, color: INK, lineHeight: 1 },
+
+  // Centered ON the silver art-frame lip.
+  dataBar: {
+    position: 'absolute' as const, top: '53.15%', left: '9%', right: '9%',
+    zIndex: 2, textAlign: 'center' as const,
+    fontSize: '2.05cqw', fontWeight: 700 as const, color: '#1e1a14',
+    whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const,
+    letterSpacing: '0.01em', lineHeight: 1.1,
+  },
+
+  attacks: {
+    position: 'absolute' as const, top: '56.8%', left: '10%', right: '10%',
+    zIndex: 2, display: 'flex', flexDirection: 'column' as const, gap: '2.3cqw',
+  },
+  atkRow: { display: 'flex', alignItems: 'center' as const, gap: '2.2cqw' },
+  atkIcon: { width: '5.4cqw', height: '5.4cqw', objectFit: 'contain' as const, flexShrink: 0 },
+  atkName: {
+    flex: 1, fontSize: '4.1cqw', fontWeight: 700 as const, color: INK,
+    textShadow: '0 1px 0 rgba(255,255,255,0.28)',
+  },
+  atkPp: { fontSize: '3.5cqw', fontWeight: 700 as const, color: '#2a2a2a', flexShrink: 0 },
+  atkPpLbl: { fontSize: '2.3cqw', color: '#4a3a28' },
+
+  // Under the bottom silver rule. Grid keeps IV/EV stat columns locked vertically.
+  statBox: {
+    position: 'absolute' as const, top: '84.4%', left: '8.5%', right: '40%',
+    zIndex: 2, display: 'flex', flexDirection: 'column' as const, gap: '1.5cqw',
+  },
+  // label | HP | ATK | DEF | SPA | SPD | SPE — equal columns so 0-digit EVs don't scrunch.
+  statGrid: {
+    display: 'grid' as const,
+    gridTemplateColumns: '3.2cqw repeat(6, minmax(0, 1fr))',
+    columnGap: '0.9cqw',
+    alignItems: 'baseline' as const,
+  },
+  statRowLabel: {
+    fontSize: '1.85cqw', fontWeight: 700 as const, color: '#4a3418', letterSpacing: '0.3px',
+  },
+  statCell: {
+    display: 'flex', alignItems: 'baseline' as const, gap: '0.35cqw',
+    minWidth: 0, justifyContent: 'flex-start' as const,
+  },
+  statKey: { fontSize: '1.5cqw', color: '#5a4020', textTransform: 'uppercase' as const },
+  statVal: {
+    fontSize: '2.3cqw', fontWeight: 700 as const, color: INK,
+    // Tabular nums so 7 / 13 / 0 / 252 all take the same digit width.
+    fontVariantNumeric: 'tabular-nums' as const,
+  },
+
+  // Illus. silver pill — nudge up so text sits optically mid in the capsule.
+  heldPill: {
+    position: 'absolute' as const, top: '87.15%', left: '57%', right: '8%',
+    zIndex: 2, height: '2.9%',
+    display: 'flex', alignItems: 'center' as const, justifyContent: 'center' as const,
+    fontSize: '1.65cqw', fontWeight: 700 as const, color: '#2a2218',
+    whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const,
+    textAlign: 'center' as const, letterSpacing: '0.01em',
+  },
+
+  // Weakness + location share the same top edge (labels line up).
+  footerRow: {
+    position: 'absolute' as const, top: '90.4%', left: '8.5%', right: '12.5%',
+    zIndex: 2, display: 'flex', alignItems: 'flex-start' as const,
+    justifyContent: 'flex-end' as const, gap: '5cqw',
+  },
+  weakness: {
+    display: 'flex', flexDirection: 'column' as const,
+    alignItems: 'center' as const, gap: '0.25cqw',
+  },
+  infoLbl: {
+    fontSize: '1.5cqw', textTransform: 'uppercase' as const, letterSpacing: '0.4px',
+    color: '#5a4020',
+  },
+  infoIcon: { width: '3.1cqw', height: '3.1cqw', objectFit: 'contain' as const },
+  infoDash: { fontSize: '2.3cqw', color: '#5a4020', lineHeight: 1 },
+  location: {
+    display: 'flex', flexDirection: 'column' as const,
+    // Center Box / Slot under the LOCATION label (was right-edge stacked).
+    alignItems: 'center' as const, gap: '0.15cqw',
+    textAlign: 'center' as const, maxWidth: '36%',
+  },
+  locationLine: {
+    fontSize: '1.85cqw', fontWeight: 700 as const, color: '#2a2218',
+    letterSpacing: '0.01em', lineHeight: 1.15,
+    whiteSpace: 'nowrap' as const,
+  },
 } as const;

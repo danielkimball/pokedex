@@ -23,7 +23,10 @@ export const TYPE_TO_TCG_ENERGY: Record<string, string> = {
   Lightning: 'lightning', Colorless: 'colorless',
 };
 
+/** Bump when energy icon PNGs are replaced so clients fetch the new asset. */
+const ENERGY_CACHE_VER = '2';
+
 export function tcgEnergyUrl(type: string): string {
   const file = TYPE_TO_TCG_ENERGY[type] ?? 'colorless';
-  return `/cards/gen1/energies/${file}.png`;
+  return `/cards/gen1/energies/${file}.png?v=${ENERGY_CACHE_VER}`;
 }

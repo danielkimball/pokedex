@@ -439,8 +439,8 @@ export function DexEntryScreen() {
                   const cardBg = CARD_BG[primaryType] || '#D4D0AC';
 
                   const renderCard = (record: PokemonRecord) => {
-                    // All Gen 1-4 records render through TcgCard (Gen 1 uses real PNG
-                    // templates; Gen 2/3/4 use a CSS placeholder until real templates land).
+                    // All Gen 1-4 records render through TcgCard (Gen 1 + HGSS Basic Fire
+                    // use real PNG templates; other Gen 2/3/4 use CSS placeholders).
                     if (record.generation && record.generation >= 1 && record.generation <= 4) {
                       return <TcgCard record={record} />;
                     }

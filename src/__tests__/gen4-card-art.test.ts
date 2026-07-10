@@ -15,6 +15,9 @@ import {
 } from '../core/constants/gen4-card-art';
 import { monCardArt } from '../core/constants/games';
 
+/** gen4CardArt appends ?v=N for cache-busting after crop regenerations. */
+const art = (path: string) => expect.stringMatching(new RegExp(`^${path.replace(/\./g, '\\.')}\\?v=\\d+$`));
+
 describe('gen4 card art tables', () => {
   it('covers every Gen 4 species in at least one era', () => {
     // Kadabra (#64) is famously banned from the TCG since 2002 — Uri Geller
@@ -40,25 +43,24 @@ describe('gen4 card art tables', () => {
 describe('gen4CardArt resolver', () => {
   it('prefers HGSS art for HeartGold + SoulSilver', () => {
     // Squirtle exists in all three eras — HGSS choice should win.
-    const hg = gen4CardArt(7, 'HeartGold');
-    expect(hg).toBe(GEN4_CARD_ART_HGSS[7]);
-    expect(gen4CardArt(7, 'SoulSilver')).toBe(GEN4_CARD_ART_HGSS[7]);
+    expect(gen4CardArt(7, 'HeartGold')).toEqual(art(GEN4_CARD_ART_HGSS[7]));
+    expect(gen4CardArt(7, 'SoulSilver')).toEqual(art(GEN4_CARD_ART_HGSS[7]));
   });
 
   it('prefers Platinum art for Platinum', () => {
     // Turtwig is in all three eras.
-    expect(gen4CardArt(387, 'Platinum')).toBe(GEN4_CARD_ART_PL[387]);
+    expect(gen4CardArt(387, 'Platinum')).toEqual(art(GEN4_CARD_ART_PL[387]));
   });
 
   it('prefers DP art for Diamond + Pearl', () => {
-    expect(gen4CardArt(387, 'Diamond')).toBe(GEN4_CARD_ART_DP[387]);
-    expect(gen4CardArt(387, 'Pearl')).toBe(GEN4_CARD_ART_DP[387]);
+    expect(gen4CardArt(387, 'Diamond')).toEqual(art(GEN4_CARD_ART_DP[387]));
+    expect(gen4CardArt(387, 'Pearl')).toEqual(art(GEN4_CARD_ART_DP[387]));
   });
 
   it('falls back across eras when chosen era is empty', () => {
     // Chikorita has no Platinum-era art; from Platinum we expect DP fallback.
     expect(GEN4_CARD_ART_PL[152]).toBeUndefined();
-    expect(gen4CardArt(152, 'Platinum')).toBe(GEN4_CARD_ART_DP[152]);
+    expect(gen4CardArt(152, 'Platinum')).toEqual(art(GEN4_CARD_ART_DP[152]));
   });
 
   it('returns null for species with no Gen 4 art (Kadabra)', () => {
@@ -68,8 +70,8 @@ describe('gen4CardArt resolver', () => {
 
   it('uses default order for unknown games', () => {
     // Default order is dp -> pl -> hgss.
-    expect(gen4CardArt(387, null)).toBe(GEN4_CARD_ART_DP[387]);
-    expect(gen4CardArt(387, 'SomeUnknownGame')).toBe(GEN4_CARD_ART_DP[387]);
+    expect(gen4CardArt(387, null)).toEqual(art(GEN4_CARD_ART_DP[387]));
+    expect(gen4CardArt(387, 'SomeUnknownGame')).toEqual(art(GEN4_CARD_ART_DP[387]));
   });
 });
 
@@ -79,15 +81,16 @@ describe('monCardArt dispatch', () => {
   });
 
   it('returns gen1 art for Gen 1 records', () => {
-    const art = monCardArt({ species: 25, game: 'Yellow', generation: 1 });
-    expect(art).toMatch(/^\/cards\/gen1\//);
+    const url = monCardArt({ species: 25, game: 'Yellow', generation: 1 });
+    expect(url).toMatch(/^\/cards\/gen1\//);
   });
 
   it('returns gen4 art for Gen 4 records, honoring game', () => {
     // Pikachu in HeartGold should pick the HGSS table.
-    const hg = monCardArt({ species: 25, game: 'HeartGold', generation: 4 });
-    expect(hg).toBe(GEN4_CARD_ART_HGSS[25]);
+    expect(monCardArt({ species: 25, game: 'HeartGold', generation: 4 }))
+      .toEqual(art(GEN4_CARD_ART_HGSS[25]));
     // Pikachu in Diamond should pick the DP table.
-    expect(monCardArt({ species: 25, game: 'Diamond', generation: 4 })).toBe(GEN4_CARD_ART_DP[25]);
+    expect(monCardArt({ species: 25, game: 'Diamond', generation: 4 }))
+      .toEqual(art(GEN4_CARD_ART_DP[25]));
   });
 });
