@@ -54,23 +54,24 @@ const GEN2_ART_WINDOW = { left: 11.0, top: 16.0, width: 78.0, height: 28.0 };
 const HGSS_GAMES = new Set(['HeartGold', 'SoulSilver']);
 
 /**
- * Art window per basic template (transparent hole). Fire lip is higher;
- * lightning’s white art rect + silver sit a bit lower on the PNG.
+ * Art window per basic template (transparent hole). Tops sit below the BASIC
+ * tab (~12.3%) so the badge stays opaque. Measured after 2026-07-11 reprocess
+ * of all Desktop HGSS_Card_Templates basics (HP removed from sources).
  */
 const HGSS_BASIC_ART_WINDOW: Record<string, { left: number; top: number; width: number; height: number }> = {
-  fire:      { left: 7.34, top: 10.34, width: 85.22, height: 41.96 },
-  // Yellow_template.png (fixed lightning): yellow art fill punched as rect below BASIC tab.
-  lightning: { left: 7.72, top: 12.30, width: 85.40, height: 40.00 },
-  // Leaf source resized 1054×1492 → 1062×1480; silver lip lower than fire.
-  grass:     { left: 7.34, top: 10.61, width: 85.40, height: 43.50 },
-  // water_template_basic_gen4.png: blue art fill; top below BASIC tab like lightning.
-  water:     { left: 6.87, top: 12.30, width: 86.35, height: 40.41 },
+  fire:      { left: 7.06, top: 12.30, width: 85.78, height: 40.07 },
+  lightning: { left: 6.50, top: 12.30, width: 86.91, height: 41.08 },
+  grass:     { left: 7.06, top: 12.30, width: 85.78, height: 42.03 },
+  water:     { left: 6.50, top: 12.30, width: 86.91, height: 43.18 },
+  fighting:  { left: 7.72, top: 12.30, width: 84.46, height: 40.14 },
+  psychic:   { left: 6.50, top: 12.30, width: 86.91, height: 42.57 },
+  colorless: { left: 6.50, top: 12.30, width: 86.91, height: 42.16 },
 };
 const HGSS_BASIC_ART_DEFAULT = HGSS_BASIC_ART_WINDOW.fire;
 
 /**
- * Text anchors per template. Fire and lightning PNGs are not pixel-identical
- * vertically — silver lip / bottom rule differ — so OT/moves/stats must track each.
+ * Text anchors per template. Silver lip / bottom rule Y differ slightly across
+ * PNGs, so OT / moves / stats / footer track each energy independently.
  */
 const HGSS_LAYOUT: Record<string, {
   dataBarTop: string;
@@ -80,40 +81,60 @@ const HGSS_LAYOUT: Record<string, {
   footerTop: string;
 }> = {
   fire: {
-    dataBarTop: '53.15%',
-    attacksTop: '56.8%',
-    statBoxTop: '85.4%',
-    heldPillTop: '87.15%',
-    footerTop: '90.4%',
+    dataBarTop: '53.31%',
+    attacksTop: '56.81%',
+    statBoxTop: '84.93%',
+    heldPillTop: '86.68%',
+    footerTop: '89.08%',
   },
   lightning: {
-    // New Yellow_template: silver lip ~52.3%, bottom rule ~84.1% (near fire).
-    dataBarTop: '53.2%',
-    attacksTop: '56.9%',
-    statBoxTop: '85.3%',
-    heldPillTop: '87.1%',
-    footerTop: '89.6%',
+    dataBarTop: '54.33%',
+    attacksTop: '57.83%',
+    statBoxTop: '86.29%',
+    heldPillTop: '88.04%',
+    footerTop: '90.44%',
   },
   grass: {
-    // Silver lip starts ~54.3%; bottom rule ~86.3% (lower than fire).
-    dataBarTop: '55.2%',
-    attacksTop: '58.5%',
-    statBoxTop: '87.5%',
-    heldPillTop: '89.5%',
-    footerTop: '92.0%',
+    dataBarTop: '55.27%',
+    attacksTop: '58.77%',
+    statBoxTop: '87.43%',
+    heldPillTop: '89.18%',
+    footerTop: '91.58%',
   },
   water: {
-    // Silver lip ~52.7%; bottom rule ~85.5%.
-    dataBarTop: '53.6%',
-    attacksTop: '57.3%',
-    statBoxTop: '86.7%',
-    heldPillTop: '88.5%',
-    footerTop: '91.0%',
+    dataBarTop: '56.76%',
+    attacksTop: '60.26%',
+    statBoxTop: '88.04%',
+    heldPillTop: '89.79%',
+    footerTop: '92.19%',
+  },
+  fighting: {
+    dataBarTop: '53.38%',
+    attacksTop: '56.88%',
+    statBoxTop: '85.68%',
+    heldPillTop: '87.43%',
+    footerTop: '89.83%',
+  },
+  psychic: {
+    dataBarTop: '55.81%',
+    attacksTop: '59.31%',
+    statBoxTop: '87.97%',
+    heldPillTop: '89.72%',
+    footerTop: '92.12%',
+  },
+  colorless: {
+    dataBarTop: '55.41%',
+    attacksTop: '58.91%',
+    statBoxTop: '87.57%',
+    heldPillTop: '89.32%',
+    footerTop: '91.72%',
   },
 };
 
-/** HGSS Basic templates currently on disk under public/cards/gen4/templates/. */
-const HGSS_BASIC_ENERGIES = new Set(['fire', 'lightning', 'grass', 'water']);
+/** Full classic Basic energy set under public/cards/gen4/templates/. */
+const HGSS_BASIC_ENERGIES = new Set([
+  'fire', 'lightning', 'grass', 'water', 'fighting', 'psychic', 'colorless',
+]);
 
 /**
  * Resolve an HGSS real-PNG template if one exists for this stage + energy.
@@ -132,7 +153,7 @@ function resolveHgssTemplate(
   if (!stageKey) return null;
   if (stageKey === 'basic' && HGSS_BASIC_ENERGIES.has(energyKey)) {
     // ?v= bumps when templates are reprocessed (art hole / corners).
-    return `/cards/gen4/templates/${stageKey}-${energyKey}.png?v=8`;
+    return `/cards/gen4/templates/${stageKey}-${energyKey}.png?v=9`;
   }
   return null;
 }
