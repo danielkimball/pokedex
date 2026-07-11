@@ -59,8 +59,8 @@ const HGSS_GAMES = new Set(['HeartGold', 'SoulSilver']);
  */
 const HGSS_BASIC_ART_WINDOW: Record<string, { left: number; top: number; width: number; height: number }> = {
   fire:      { left: 7.34, top: 10.34, width: 85.22, height: 41.96 },
-  // Hole punched through white to just above silver lip (~54%).
-  lightning: { left: 7.34, top: 10.34, width: 85.22, height: 43.60 },
+  // Yellow_template.png (fixed lightning): yellow art fill punched as rect below BASIC tab.
+  lightning: { left: 7.72, top: 12.30, width: 85.40, height: 40.00 },
   // Leaf source resized 1054×1492 → 1062×1480; silver lip lower than fire.
   grass:     { left: 7.34, top: 10.61, width: 85.40, height: 43.50 },
 };
@@ -85,15 +85,15 @@ const HGSS_LAYOUT: Record<string, {
     footerTop: '90.4%',
   },
   lightning: {
-    // Silver lip mid ~54.5–55.5%; bottom rule ~87%; held pill ~90.5%.
-    dataBarTop: '54.9%',
-    attacksTop: '58.0%',
-    statBoxTop: '87.7%',
-    heldPillTop: '90.3%',
-    footerTop: '92.8%',
+    // New Yellow_template: silver lip ~52.3%, bottom rule ~84.1% (near fire).
+    dataBarTop: '53.2%',
+    attacksTop: '56.9%',
+    statBoxTop: '85.3%',
+    heldPillTop: '87.1%',
+    footerTop: '89.6%',
   },
   grass: {
-    // Silver lip starts ~54.3%; bottom rule ~86.3% (closer to lightning than fire).
+    // Silver lip starts ~54.3%; bottom rule ~86.3% (lower than fire).
     dataBarTop: '55.2%',
     attacksTop: '58.5%',
     statBoxTop: '87.5%',
@@ -122,7 +122,7 @@ function resolveHgssTemplate(
   if (!stageKey) return null;
   if (stageKey === 'basic' && HGSS_BASIC_ENERGIES.has(energyKey)) {
     // ?v= bumps when templates are reprocessed (art hole / corners).
-    return `/cards/gen4/templates/${stageKey}-${energyKey}.png?v=6`;
+    return `/cards/gen4/templates/${stageKey}-${energyKey}.png?v=7`;
   }
   return null;
 }

@@ -33,8 +33,8 @@ Key UI: collection list + **card grid**, dex entry carousel, filters/sort, Home 
 **Source templates (user-provided):**  
 `~/Desktop/HGSS_Card_Templates/`  
 - `Basic_fire_Gen4.png`  
-- `basic_electric_tempalte_gen4.png` (typo in filename is fine; keep as-is)  
-- `basic_leaf_template.png` → wired as **grass**  
+- `Yellow_template.png` → **lightning** (replaces buggy `basic_electric_tempalte_gen4.png`)  
+- `basic_leaf_template.png` → **grass**  
 - Reference full cards (not blanks): `basic_water.jpg` (Lapras), `Basic_fight.jpg` (Tyrogue), `basic_psyhic.jpg` (Wobbuffet)  
 - Reference scans under `actualcards/`
 
@@ -47,11 +47,17 @@ See `TCG_BABY_SPECIES` + `tcgStageLabel()` in `TcgCard.tsx`.
 **Layout:** OT on silver lip under art; moves; IV/EV under bottom rule; held in Illus. pill; weakness + location bottom-right.  
 Fire / lightning / grass use **per-energy vertical anchors** in `HGSS_LAYOUT` (PNG geometry is not identical).
 
-**Grass layout notes (2026-07-11):**  
-- Source was 1054×1492; resized to **1062×1480**, near-white punched transparent (thr 248).  
-- Silver lip starts ~**54.3%** (lower than fire); bottom rule ~**86.3%**.  
-- Art window: `{ left: 7.34, top: 10.61, width: 85.40, height: 43.50 }`.  
-- Layout closer to lightning than fire.
+**Grass layout notes:**  
+- Source `basic_leaf_template.png` 1054×1492 → **1062×1480**, near-white punch (thr 248).  
+- Silver lip ~**54.3%**; bottom rule ~**86.3%**.  
+- Art window: `{ left: 7.34, top: 10.61, width: 85.40, height: 43.50 }`.
+
+**Lightning / Yellow_template notes (re-export 2026-07-11):**  
+- Source already **1062×1480**; art fill is **yellow** (not white) — rectangular punch, not white-key.  
+- Art top must sit **below BASIC tab** (~12.3%) so the badge stays opaque.  
+- Baked “HP” on silver wedge was cleared so CSS overlay stays single.  
+- Silver lip ~**52.3%**; bottom rule ~**84.1%** (near fire).  
+- Art window: `{ left: 7.72, top: 12.30, width: 85.40, height: 40.00 }`.
 
 **Art:**  
 - Maps: `src/core/constants/gen4-card-art.ts` (`GEN4_CARD_ART_HGSS` / PL / DP)  
@@ -110,13 +116,13 @@ Fire / lightning / grass use **per-energy vertical anchors** in `HGSS_LAYOUT` (P
 7. Hard-refresh; then push `main` for Vercel
 
 **Stage templates:** `resolveHgssTemplate` already maps Stage 1/2 names → `stage1` / `stage2` filenames; only **basic** + fire/lightning/grass are allow-listed today.  
-**Template cache:** `?v=6` on HGSS template URLs.
+**Template cache:** `?v=7` on HGSS template URLs.
 
 ### Known card quirks / polish
 
 - [ ] Per-species hand crops still needed when flavor bar or framing is ugly (Charmander PL was hand-fixed; others may need same)
-- [ ] Lightning layout still slightly different from fire (template geometry); re-export electric template matching fire’s art/lip Y if you want 100% shared CSS
-- [ ] Grass layout also differs slightly (lip lower); fine as per-energy layout
+- [ ] Grass layout differs slightly (lip lower); fine as per-energy layout
+- [ ] Yellow_template HP clear leaves a slight smudge on silver wedge (harmless under CSS HP)
 - [ ] Gen 2 has art + CSS frame only (no real Neo PNG templates yet)
 - [ ] Gen 3: no TCG art path (null art)
 - [ ] Stage 1/2 still use CSS placeholder even for Fire/Electric/Grass
@@ -150,9 +156,9 @@ Fire / lightning / grass use **per-energy vertical anchors** in `HGSS_LAYOUT` (P
 ## Recent git (card work)
 
 ```
-(pending) HGSS Basic Grass card template
+(pending) Replace lightning with Yellow_template; re-apply grass
+691128b Add HGSS Basic Grass card template
 28ccc46 HGSS Basic Lightning cards, type sort, and art/layout fixes
-29404e6 Add HGSS Basic Fire card template with game-data overlays
 ```
 
 ---
