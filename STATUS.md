@@ -29,12 +29,14 @@ Key UI: collection list + **card grid**, dex entry carousel, filters/sort, Home 
 | **Basic Fire** | `public/cards/gen4/templates/basic-fire.png` | HG/SS + TCG Basic + primary Fire |
 | **Basic Lightning** | `public/cards/gen4/templates/basic-lightning.png` | HG/SS + TCG Basic + primary Electric |
 | **Basic Grass** | `public/cards/gen4/templates/basic-grass.png` | HG/SS + TCG Basic + primary Grass/Bug/Poison |
+| **Basic Water** | `public/cards/gen4/templates/basic-water.png` | HG/SS + TCG Basic + primary Water/Ice |
 
 **Source templates (user-provided):**  
 `~/Desktop/HGSS_Card_Templates/`  
 - `Basic_fire_Gen4.png`  
 - `Yellow_template.png` → **lightning** (replaces buggy `basic_electric_tempalte_gen4.png`)  
 - `basic_leaf_template.png` → **grass**  
+- `water_template_basic_gen4.png` → **water**  
 - Reference full cards (not blanks): `basic_water.jpg` (Lapras), `Basic_fight.jpg` (Tyrogue), `basic_psyhic.jpg` (Wobbuffet)  
 - Reference scans under `actualcards/`
 
@@ -59,6 +61,11 @@ Fire / lightning / grass use **per-energy vertical anchors** in `HGSS_LAYOUT` (P
 - Silver lip ~**52.3%**; bottom rule ~**84.1%** (near fire).  
 - Art window: `{ left: 7.72, top: 12.30, width: 85.40, height: 40.00 }`.
 
+**Water layout notes:**  
+- Source `water_template_basic_gen4.png` 1059×1486 → **1062×1480**; blue art fill (not white).  
+- Same BASIC-safe top (~12.3%); silver lip ~**52.7%**; bottom rule ~**85.5%**.  
+- Art window: `{ left: 6.87, top: 12.30, width: 86.35, height: 40.41 }`.
+
 **Art:**  
 - Maps: `src/core/constants/gen4-card-art.ts` (`GEN4_CARD_ART_HGSS` / PL / DP)  
 - Files: `public/cards/gen4/<set>/<num>.jpg`  
@@ -75,7 +82,8 @@ Fire / lightning / grass use **per-energy vertical anchors** in `HGSS_LAYOUT` (P
 - Colorless = HGSS star cut from Cyndaquil card  
 - URLs via `tcgEnergyUrl()` + `ENERGY_CACHE_VER` in `energies.ts`  
 - Electric type → energy key `lightning` (not `electric`)  
-- Grass type → energy key `grass` (Bug/Poison also map to grass frame)
+- Grass type → energy key `grass` (Bug/Poison also map to grass frame)  
+- Water type → energy key `water` (Ice also maps to water frame)
 
 ### Dex UX
 
@@ -97,7 +105,7 @@ Fire / lightning / grass use **per-energy vertical anchors** in `HGSS_LAYOUT` (P
 
 | Stage | Energies needed |
 |-------|-----------------|
-| **Basic** | water, fighting, psychic, colorless (+ metal/dark if you want) |
+| **Basic** | fighting, psychic, colorless (+ metal/dark if you want) |
 | **Stage 1** | all energies that have evolutions |
 | **Stage 2** | fire / water / grass / etc. |
 
@@ -115,8 +123,8 @@ Fire / lightning / grass use **per-energy vertical anchors** in `HGSS_LAYOUT` (P
 6. Re-crop that energy’s species art if aspect differs; bump `GEN4_ART_CACHE_VER`
 7. Hard-refresh; then push `main` for Vercel
 
-**Stage templates:** `resolveHgssTemplate` already maps Stage 1/2 names → `stage1` / `stage2` filenames; only **basic** + fire/lightning/grass are allow-listed today.  
-**Template cache:** `?v=7` on HGSS template URLs.
+**Stage templates:** `resolveHgssTemplate` already maps Stage 1/2 names → `stage1` / `stage2` filenames; only **basic** + fire/lightning/grass/water are allow-listed today.  
+**Template cache:** `?v=8` on HGSS template URLs.
 
 ### Known card quirks / polish
 
@@ -125,12 +133,12 @@ Fire / lightning / grass use **per-energy vertical anchors** in `HGSS_LAYOUT` (P
 - [ ] Yellow_template HP clear leaves a slight smudge on silver wedge (harmless under CSS HP)
 - [ ] Gen 2 has art + CSS frame only (no real Neo PNG templates yet)
 - [ ] Gen 3: no TCG art path (null art)
-- [ ] Stage 1/2 still use CSS placeholder even for Fire/Electric/Grass
+- [ ] Stage 1/2 still use CSS placeholder even for Fire/Electric/Grass/Water
 - [ ] Dual-type → single primary energy for frame color
 
 ### Product / infra backlog (from older work)
 
-- [ ] Real Gen 2/3/4 PNG frames beyond HGSS basic fire/lightning/grass
+- [ ] Real Gen 2/3/4 PNG frames beyond HGSS basic fire/lightning/grass/water
 - [ ] Ability display completeness / Gen 3 ability slot table
 - [ ] Home + transfer polish
 - [ ] Living tests against Desktop `Pokemon HeartGold Version.dsv` (some tests skip if missing)
@@ -156,9 +164,9 @@ Fire / lightning / grass use **per-energy vertical anchors** in `HGSS_LAYOUT` (P
 ## Recent git (card work)
 
 ```
-(pending) Replace lightning with Yellow_template; re-apply grass
+(pending) HGSS Basic Water
+1e1ad7d Replace HGSS lightning with Yellow_template; reapply grass
 691128b Add HGSS Basic Grass card template
-28ccc46 HGSS Basic Lightning cards, type sort, and art/layout fixes
 ```
 
 ---
@@ -176,4 +184,4 @@ Fire / lightning / grass use **per-energy vertical anchors** in `HGSS_LAYOUT` (P
 
 ## Quick “what to do next” (user intent as of 2026-07-11)
 
-Continue **one-by-one HGSS basic templates**. Grass is done. Next when **blank** frames are drawn: **water / fighting / psychic / colorless**. Stage 1/2 later. Keep illustrations cropped for the basic frame so new templates drop in cleanly.
+Continue **one-by-one HGSS basic templates**. Fire / lightning / grass / water done. Next when **blank** frames are drawn: **fighting / psychic / colorless**. Stage 1/2 later.

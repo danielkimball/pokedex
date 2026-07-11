@@ -63,6 +63,8 @@ const HGSS_BASIC_ART_WINDOW: Record<string, { left: number; top: number; width: 
   lightning: { left: 7.72, top: 12.30, width: 85.40, height: 40.00 },
   // Leaf source resized 1054×1492 → 1062×1480; silver lip lower than fire.
   grass:     { left: 7.34, top: 10.61, width: 85.40, height: 43.50 },
+  // water_template_basic_gen4.png: blue art fill; top below BASIC tab like lightning.
+  water:     { left: 6.87, top: 12.30, width: 86.35, height: 40.41 },
 };
 const HGSS_BASIC_ART_DEFAULT = HGSS_BASIC_ART_WINDOW.fire;
 
@@ -100,10 +102,18 @@ const HGSS_LAYOUT: Record<string, {
     heldPillTop: '89.5%',
     footerTop: '92.0%',
   },
+  water: {
+    // Silver lip ~52.7%; bottom rule ~85.5%.
+    dataBarTop: '53.6%',
+    attacksTop: '57.3%',
+    statBoxTop: '86.7%',
+    heldPillTop: '88.5%',
+    footerTop: '91.0%',
+  },
 };
 
 /** HGSS Basic templates currently on disk under public/cards/gen4/templates/. */
-const HGSS_BASIC_ENERGIES = new Set(['fire', 'lightning', 'grass']);
+const HGSS_BASIC_ENERGIES = new Set(['fire', 'lightning', 'grass', 'water']);
 
 /**
  * Resolve an HGSS real-PNG template if one exists for this stage + energy.
@@ -122,7 +132,7 @@ function resolveHgssTemplate(
   if (!stageKey) return null;
   if (stageKey === 'basic' && HGSS_BASIC_ENERGIES.has(energyKey)) {
     // ?v= bumps when templates are reprocessed (art hole / corners).
-    return `/cards/gen4/templates/${stageKey}-${energyKey}.png?v=7`;
+    return `/cards/gen4/templates/${stageKey}-${energyKey}.png?v=8`;
   }
   return null;
 }
