@@ -1,3 +1,11 @@
+# Pokedex
+
+Personal multi-gen save tracker + TCG-style cards.
+
+**Living project status (start new sessions here):** [STATUS.md](./STATUS.md)
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
