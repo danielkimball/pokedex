@@ -199,6 +199,18 @@ export function PokedexListScreen() {
       switch (dexSort) {
         case 'name':
           return (SPECIES[a] || '').localeCompare(SPECIES[b] || '');
+        case 'type': {
+          // Primary type index (game order), then secondary, then dex #.
+          const ap = SPECIES_TYPES[a] ?? [-1, -1];
+          const bp = SPECIES_TYPES[b] ?? [-1, -1];
+          const a0 = ap[0] < 0 ? 99 : ap[0];
+          const b0 = bp[0] < 0 ? 99 : bp[0];
+          if (a0 !== b0) return a0 - b0;
+          const a1 = ap[1] < 0 ? 99 : ap[1];
+          const b1 = bp[1] < 0 ? 99 : bp[1];
+          if (a1 !== b1) return a1 - b1;
+          return a - b;
+        }
         case 'level-desc': {
           const aLv = levelMap.get(a) ?? 0;
           const bLv = levelMap.get(b) ?? 0;
@@ -468,15 +480,13 @@ export function PokedexListScreen() {
                   >
                     Level {dexSort === 'level-asc' ? '↑' : '↓'}
                   </button>
-                  {dexView === 'card' && (
-                    <button
-                      type="button"
-                      style={dexSort === 'type' ? s.pillOn : s.pillOff}
-                      onClick={() => setDexSort('type')}
-                    >
-                      Type
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    style={dexSort === 'type' ? s.pillOn : s.pillOff}
+                    onClick={() => setDexSort('type')}
+                  >
+                    Type
+                  </button>
                 </div>
               </div>
               <div style={s.refineBlock}>

@@ -54,15 +54,50 @@ const GEN2_ART_WINDOW = { left: 11.0, top: 16.0, width: 78.0, height: 28.0 };
 const HGSS_GAMES = new Set(['HeartGold', 'SoulSilver']);
 
 /**
- * HGSS Basic template art window (transparent hole in basic-fire.png).
- * Measured on the 1062×1480 source after punching the white art rect.
+ * Art window per basic template (transparent hole). Fire lip is higher;
+ * lightning’s white art rect + silver sit a bit lower on the PNG.
  */
-const HGSS_BASIC_ART_WINDOW = { left: 7.34, top: 10.34, width: 85.31, height: 42.03 };
+const HGSS_BASIC_ART_WINDOW: Record<string, { left: number; top: number; width: number; height: number }> = {
+  fire:      { left: 7.34, top: 10.34, width: 85.22, height: 41.96 },
+  // Hole punched through white to just above silver lip (~54%).
+  lightning: { left: 7.34, top: 10.34, width: 85.22, height: 43.60 },
+};
+const HGSS_BASIC_ART_DEFAULT = HGSS_BASIC_ART_WINDOW.fire;
+
+/**
+ * Text anchors per template. Fire and lightning PNGs are not pixel-identical
+ * vertically — silver lip / bottom rule differ — so OT/moves/stats must track each.
+ */
+const HGSS_LAYOUT: Record<string, {
+  dataBarTop: string;
+  attacksTop: string;
+  statBoxTop: string;
+  heldPillTop: string;
+  footerTop: string;
+}> = {
+  fire: {
+    dataBarTop: '53.15%',
+    attacksTop: '56.8%',
+    statBoxTop: '85.4%',
+    heldPillTop: '87.15%',
+    footerTop: '90.4%',
+  },
+  lightning: {
+    // Silver lip mid ~54.5–55.5%; bottom rule ~87%; held pill ~90.5%.
+    dataBarTop: '54.9%',
+    attacksTop: '58.0%',
+    statBoxTop: '87.7%',
+    heldPillTop: '90.3%',
+    footerTop: '92.8%',
+  },
+};
+
+/** HGSS Basic templates currently on disk under public/cards/gen4/templates/. */
+const HGSS_BASIC_ENERGIES = new Set(['fire', 'lightning']);
 
 /**
  * Resolve an HGSS real-PNG template if one exists for this stage + energy.
  * Filenames: public/cards/gen4/templates/{basic|stage1|stage2}-{energy}.png
- * Only basic-fire is shipped so far — everything else falls back to CSS.
  */
 function resolveHgssTemplate(
   game: string | null | undefined,
@@ -75,9 +110,9 @@ function resolveHgssTemplate(
     stage === 'Stage 1' ? 'stage1' :
     stage === 'Stage 2' ? 'stage2' : null;
   if (!stageKey) return null;
-  // Expand this allow-list as new templates land on disk.
-  if (stageKey === 'basic' && energyKey === 'fire') {
-    return `/cards/gen4/templates/${stageKey}-${energyKey}.png`;
+  if (stageKey === 'basic' && HGSS_BASIC_ENERGIES.has(energyKey)) {
+    // ?v= bumps when templates are reprocessed (art hole / corners).
+    return `/cards/gen4/templates/${stageKey}-${energyKey}.png?v=5`;
   }
   return null;
 }
@@ -136,6 +171,33 @@ function stageLabel(species: number, generation: number): string {
   const chain = (EVOLUTIONS[species]?.chain ?? [species]).filter(d => d <= maxDex);
   const idx = chain.indexOf(species);
   return idx <= 0 ? 'Basic' : idx === 1 ? 'Stage 1' : 'Stage 2';
+}
+
+/**
+ * Gen 1–4 baby Pokémon. In the TCG, babies are Basic and evolve into *another*
+ * Basic (not Stage 1) — e.g. Pichu → Pikachu (HS 78 is Basic), then Raichu is Stage 1.
+ * Used only for HGSS card-template selection so frames match real cards.
+ */
+const TCG_BABY_SPECIES = new Set([
+  172, 173, 174, 175, // Pichu, Cleffa, Igglybuff, Togepi
+  236, 238, 239, 240, // Tyrogue, Smoochum, Elekid, Magby
+  298, 360,           // Azurill, Wynaut
+  406, 433, 438, 439, 440, 446, 447, 458, // Gen 4 babies
+]);
+
+/** TCG stage for HGSS template filenames (basic / stage1 / stage2). */
+function tcgStageLabel(species: number, generation: number): string {
+  const maxDex = GEN_MAX_DEX[generation] ?? 493;
+  const chain = (EVOLUTIONS[species]?.chain ?? [species]).filter(d => d <= maxDex);
+  const idx = chain.indexOf(species);
+  if (idx <= 0) return 'Basic';
+  // Evolving from a baby does not advance stage (classic TCG baby rule).
+  let stage = 0;
+  for (let i = 1; i <= idx; i++) {
+    if (TCG_BABY_SPECIES.has(chain[i - 1]!)) continue;
+    stage += 1;
+  }
+  return stage <= 0 ? 'Basic' : stage === 1 ? 'Stage 1' : 'Stage 2';
 }
 
 function approxHp(level: number): number {
@@ -264,7 +326,9 @@ function HgssTcgCard({
     ['SPA', record.evs.spa], ['SPD', record.evs.spd], ['SPE', record.evs.spe],
   ];
 
-  const win = HGSS_BASIC_ART_WINDOW;
+  const energyFromTpl = templateUrl.match(/basic-([a-z]+)\.png/)?.[1] ?? 'fire';
+  const win = HGSS_BASIC_ART_WINDOW[energyFromTpl] ?? HGSS_BASIC_ART_DEFAULT;
+  const lay = HGSS_LAYOUT[energyFromTpl] ?? HGSS_LAYOUT.fire;
 
   // Meta sits immediately after the name (same header band), not pushed right.
   const metaBits = [
@@ -274,8 +338,7 @@ function HgssTcgCard({
 
   return (
     <div style={H.card}>
-      {/* Art under template. v6 crops already exclude the stage tab — cover fills
-          the hole edge-to-edge with no double-BASIC ghost. */}
+      {/* Art under template — cover fill; crops matched to hole aspect. */}
       <div
         style={{
           position: 'absolute',
@@ -305,7 +368,6 @@ function HgssTcgCard({
 
       <img src={templateUrl} alt="" style={{ ...S.template, zIndex: 1 }} aria-hidden />
 
-      {/* Name + Lv/nature inline (real card: name left; our meta trails the name). */}
       <div style={H.nameRow}>
         <span style={H.name}>
           {title}{record.isShiny && <span style={S.shiny}> ★</span>}
@@ -313,21 +375,18 @@ function HgssTcgCard({
         {metaBits && <span style={H.meta}>{metaBits}</span>}
       </div>
 
-      {/* Real HGSS: dark "HP60", vertically centered in the silver wedge by the energy. */}
       <div style={H.hp}>
         <span style={H.hpLbl}>HP</span>
         <span style={H.hpNum}>{hp}</span>
       </div>
 
-      {/* Trainer data centered ON the silver art-frame lip. */}
-      <div style={H.dataBar}>
+      <div style={{ ...H.dataBar, top: lay.dataBarTop }}>
         OT: {record.otName || 'Unknown'}
         {' · '}Game: {game}
         {' · '}{dex3}/{dexMax}
       </div>
 
-      {/* Attacks */}
-      <div style={H.attacks}>
+      <div style={{ ...H.attacks, top: lay.attacksTop }}>
         {moves.map((mv, i) => (
           <div key={i} style={H.atkRow}>
             <img src={energy(mv.type)} alt="" style={H.atkIcon} />
@@ -341,8 +400,7 @@ function HgssTcgCard({
         ))}
       </div>
 
-      {/* IVs / EVs — shared 6-column grid so ATK/DEF/… stay vertically aligned. */}
-      <div style={H.statBox}>
+      <div style={{ ...H.statBox, top: lay.statBoxTop }}>
         <div style={H.statGrid}>
           <span style={H.statRowLabel}>IV</span>
           {ivCells.map(([k, v]) => (
@@ -363,13 +421,11 @@ function HgssTcgCard({
         </div>
       </div>
 
-      {/* Held item centered in the Illus. silver pill. */}
-      <div style={H.heldPill}>
+      <div style={{ ...H.heldPill, top: lay.heldPillTop }}>
         {heldItemName ? `Held: ${heldItemName}` : 'Held: —'}
       </div>
 
-      {/* Footer: weakness left of location; location stacked to clear the set logo. */}
-      <div style={H.footerRow}>
+      <div style={{ ...H.footerRow, top: lay.footerTop }}>
         <div style={H.weakness}>
           <span style={H.infoLbl}>weakness</span>
           {weakness
@@ -390,7 +446,8 @@ function HgssTcgCard({
 export function TcgCard({ record }: { record: PokemonRecord }) {
   const gen = record.generation ?? 1;
   const energyKey = getTcgEnergy(record.species);
-  const stage = stageLabel(record.species, gen);
+  // HGSS frames follow TCG stage (Pikachu = Basic), not game evo index.
+  const stage = tcgStageLabel(record.species, gen);
   const hgssTpl = resolveHgssTemplate(record.game, energyKey, stage);
   if (hgssTpl) {
     return <HgssTcgCard record={record} templateUrl={hgssTpl} />;
@@ -659,14 +716,13 @@ const S = {
   statVal: { fontSize: '2.5cqw', fontWeight: 700 as const, color: INK },
 } as const;
 
-/** Layout tokens for HGSS real-PNG templates (Basic Fire measured on 1062×1480). */
+/** Layout tokens for HGSS real-PNG templates — one shared layout for all basic-* energies. */
 const H = {
-  // Clip to rounded card silhouette so residual corner pixels never show.
+  // Full template silhouette (yellow rounded corners are in the PNG — don't CSS-clip).
   card: {
     position: 'relative' as const, width: '100%', maxWidth: '330px',
-    aspectRatio: '720 / 990', margin: '0 auto',
+    aspectRatio: '1062 / 1480', margin: '0 auto',
     containerType: 'inline-size' as const, fontFamily: FONT, userSelect: 'none' as const,
-    borderRadius: '3.6cqw', overflow: 'hidden' as const,
     background: 'transparent',
   },
 
@@ -686,19 +742,25 @@ const H = {
     whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const,
     minWidth: 0,
   },
-  // Same vertical band as the name so HP tracks the real-card mid-banner line.
-  // right:15.8% → ~2% air before the energy (left edge ~86.4%).
+  // Real HGSS: number vertically centers with the fire energy; "HP" rides its baseline.
+  // Band spans the silver wedge mid-height (energy ~4–7% top) — not up in the red,
+  // not slammed to the rail floor. right:15.8% → ~2% air before energy.
   hp: {
-    position: 'absolute' as const, top: '3.55%', right: '15.8%', height: '5.2%',
+    position: 'absolute' as const, top: '3.4%', right: '15.8%', height: '5.6%',
     zIndex: 2, display: 'flex', alignItems: 'center' as const, justifyContent: 'flex-end' as const,
     gap: 0,
   },
   hpLbl: {
-    fontSize: '2.2cqw', fontWeight: 700 as const, color: INK,
-    letterSpacing: '-0.05em', lineHeight: 1,
-    position: 'relative' as const, top: '0.15cqw',
+    fontSize: '2.15cqw', fontWeight: 700 as const, color: INK,
+    letterSpacing: '-0.06em', lineHeight: 1,
+    // Optical: small "HP" sits on the number baseline inside the centered band.
+    position: 'relative' as const, top: '0.55cqw',
   },
-  hpNum: { fontSize: '4.9cqw', fontWeight: 700 as const, color: INK, lineHeight: 1 },
+  hpNum: {
+    fontSize: '4.9cqw', fontWeight: 700 as const, color: INK, lineHeight: 1,
+    // Original cards pack multi-digit HP tight (HP100 / HP130).
+    letterSpacing: '-0.07em',
+  },
 
   // Centered ON the silver art-frame lip.
   dataBar: {
@@ -724,7 +786,7 @@ const H = {
 
   // Under the bottom silver rule. Grid keeps IV/EV stat columns locked vertically.
   statBox: {
-    position: 'absolute' as const, top: '84.4%', left: '8.5%', right: '40%',
+    position: 'absolute' as const, top: '85.4%', left: '8.5%', right: '40%',
     zIndex: 2, display: 'flex', flexDirection: 'column' as const, gap: '1.5cqw',
   },
   // label | HP | ATK | DEF | SPA | SPD | SPE — equal columns so 0-digit EVs don't scrunch.

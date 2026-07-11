@@ -11,7 +11,7 @@ import { useMemo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../../state/store';
 import { SPECIES } from '../../core/constants/species';
-import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
+import { SPECIES_TYPES } from '../../core/constants/types';
 import { getAllPokemon } from '../../db/pokemon-store';
 import type { PokemonRecord } from '../../db/schema';
 import { TcgCard } from '../ui/TcgCard';
@@ -20,15 +20,6 @@ const GEN_RANGES: Record<number, [number, number]> = {
   1: [1, 151], 2: [152, 251], 3: [252, 386], 4: [387, 493],
 };
 const GEN_LABEL: Record<number, string> = { 1: 'GEN I', 2: 'GEN II', 3: 'GEN III', 4: 'GEN IV' };
-
-function typesFor(species: number): string[] {
-  const pair = SPECIES_TYPES[species];
-  if (!pair) return [];
-  const out: string[] = [];
-  if (pair[0] >= 0) out.push(TYPES[pair[0]]);
-  if (pair[1] >= 0) out.push(TYPES[pair[1]]);
-  return out;
-}
 
 function genOf(species: number): number {
   for (const g of [1, 2, 3, 4]) {
@@ -92,9 +83,16 @@ export function DexCardView() {
       switch (dexSort) {
         case 'name': return (SPECIES[a.species] || '').localeCompare(SPECIES[b.species] || '');
         case 'type': {
-          const at = typesFor(a.species)[0] || 'zzz';
-          const bt = typesFor(b.species)[0] || 'zzz';
-          return at !== bt ? at.localeCompare(bt) : a.species - b.species;
+          // Primary type index (game order), then secondary, then dex #.
+          const ap = SPECIES_TYPES[a.species] ?? [-1, -1];
+          const bp = SPECIES_TYPES[b.species] ?? [-1, -1];
+          const a0 = ap[0] < 0 ? 99 : ap[0];
+          const b0 = bp[0] < 0 ? 99 : bp[0];
+          if (a0 !== b0) return a0 - b0;
+          const a1 = ap[1] < 0 ? 99 : ap[1];
+          const b1 = bp[1] < 0 ? 99 : bp[1];
+          if (a1 !== b1) return a1 - b1;
+          return a.species - b.species;
         }
         case 'level-desc': return b.maxLevel !== a.maxLevel ? b.maxLevel - a.maxLevel : a.species - b.species;
         case 'level-asc': return a.maxLevel !== b.maxLevel ? a.maxLevel - b.maxLevel : a.species - b.species;
