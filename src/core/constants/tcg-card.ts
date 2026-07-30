@@ -86,5 +86,5 @@ export function resolveHgssTemplate(
   const stageKey = HGSS_STAGE_KEY[stage];
   if (!stageKey || !HGSS_ENERGIES.has(energyKey)) return null;
   // ?v= bumps when templates are reprocessed (art hole / corners / tab).
-  return `/cards/gen4/templates/${stageKey}-${energyKey}.webp?v=10`;
+  return `/cards/gen4/templates/${stageKey}-${energyKey}.webp?v=11`;
 }

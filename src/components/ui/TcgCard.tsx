@@ -52,23 +52,31 @@ const GEN4_ART_WINDOW = { left: 11.0, top: 13.5, width: 78.0, height: 36.0 };
 const GEN2_ART_WINDOW = { left: 11.0, top: 16.0, width: 78.0, height: 28.0 };
 
 /**
- * Art window per energy (transparent hole). Tops sit below the stage tab
- * (~12.3%) so the badge stays opaque. Measured after the 2026-07-11 reprocess
- * of all pokedex HGSS_Card_Templates basics (HP removed from sources).
+ * Art window per energy (transparent hole).
  *
- * Stage 1 / Stage 2 frames are derived from those same basics (only the tab
- * lettering differs — see tmp/hgss_make_stages.py), so one window per energy
- * covers all three stages.
+ * Tops sit just under the silver rail, ~10.2-10.6%, matching a real HGSS card
+ * (measured at 10.16% on the Cyndaquil scan in HGSS_Card_Templates/actualcards).
+ * The stage-tab capsule stays opaque and overhangs the art, as on a real card.
+ * The blanks originally punched the hole at 12.30%, which left a band of flat
+ * opaque colour between the tab and the illustration — re-punched by
+ * tmp/hgss_repunch_hole.py.
+ *
+ * Stage 1 / Stage 2 frames are derived from the basics (only the tab lettering
+ * differs — see tmp/hgss_make_stages.py), so one window per energy covers all
+ * three stages.
  */
 const HGSS_ART_WINDOW: Record<string, { left: number; top: number; width: number; height: number }> = {
-  fire:      { left: 7.06, top: 12.30, width: 85.78, height: 40.07 },
-  lightning: { left: 6.50, top: 12.30, width: 86.91, height: 41.08 },
-  grass:     { left: 7.06, top: 12.30, width: 85.78, height: 42.03 },
-  water:     { left: 6.50, top: 12.30, width: 86.91, height: 43.18 },
-  fighting:  { left: 7.72, top: 12.30, width: 84.46, height: 40.14 },
-  psychic:   { left: 6.50, top: 12.30, width: 86.91, height: 42.57 },
-  colorless: { left: 6.50, top: 12.30, width: 86.91, height: 42.16 },
+  fire:      { left: 7.06, top: 10.27, width: 85.78, height: 42.19 },
+  lightning: { left: 6.50, top: 10.47, width: 86.91, height: 43.01 },
+  grass:     { left: 7.06, top: 10.47, width: 85.78, height: 43.95 },
+  water:     { left: 6.50, top: 10.20, width: 86.91, height: 45.37 },
+  fighting:  { left: 7.72, top: 10.41, width: 84.46, height: 42.13 },
+  psychic:   { left: 6.50, top: 10.20, width: 86.91, height: 44.76 },
+  colorless: { left: 6.50, top: 10.14, width: 86.91, height: 44.42 },
 };
+// Heights carry +0.10 over the measured alpha bbox: at some viewport widths the
+// box rounded a device pixel short and left a hairline of bare hole along the
+// bottom. The overshoot lands behind the opaque silver lip, so it never shows.
 const HGSS_ART_DEFAULT = HGSS_ART_WINDOW.fire;
 
 /**
@@ -134,14 +142,13 @@ const HGSS_LAYOUT: Record<string, {
 };
 
 /**
- * The gen4 illustrations were cropped at (0.040, 0.075, 0.960, 0.490) of the
- * source card, which keeps the source card's OWN stage tab in the top strip —
- * `(0.123 - 0.075) / (0.490 - 0.075)` of the crop. Against the CSS placeholder
- * that read as a nice partial tab, but the real templates bake their own tab,
- * so the leftover ghosts through it ("STAGE 1 · Evolves from Bulbasaur" under
- * a Stage 2 badge). Zoom the art from its bottom edge to push that strip out.
+ * The gen4 illustrations keep a sliver of the source card's OWN stage tab along
+ * the top — measured at ~10px of 423 on the HGSS-era crops, e.g.
+ * public/cards/gen4/hgss1/57.jpg. Now that the hole reaches up under our own
+ * opaque tab, that sliver lands behind it and is hidden, so we only need to zoom
+ * past the source's frame edge. Anything larger visibly shaves the artwork.
  */
-const HGSS_ART_TAB_STRIP = 0.1157;
+const HGSS_ART_TAB_STRIP = 0.024;
 const HGSS_ART_ZOOM = 1 / (1 - HGSS_ART_TAB_STRIP);
 
 const SUBTITLE_POS: Record<string, { top: string; left: string; right: string }> = {

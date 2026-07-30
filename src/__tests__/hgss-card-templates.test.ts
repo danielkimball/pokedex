@@ -19,7 +19,7 @@ const TEMPLATE_DIR = resolve(PUBLIC_DIR, 'cards/gen4/templates');
 const ENERGIES = ['fire', 'lightning', 'grass', 'water', 'fighting', 'psychic', 'colorless'];
 const STAGES = ['basic', 'stage1', 'stage2'];
 
-/** "/cards/gen4/templates/basic-grass.webp?v=10" -> absolute path under public/. */
+/** "/cards/gen4/templates/basic-grass.webp?v=11" -> absolute path under public/. */
 function templatePath(url: string): string {
   return resolve(PUBLIC_DIR, url.split('?')[0]!.replace(/^\//, ''));
 }

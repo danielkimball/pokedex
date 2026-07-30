@@ -7,11 +7,16 @@
 
 ---
 
-## ▶ IN PROGRESS — art does not fit the frame window (2026-07-30)
+## ▶ IN PROGRESS — one bug left (2026-07-30)
 
-**Read this first. Two open bugs from Dan's review of commit `bed8b8e`.**
+### Bug 2 (OPEN, next up) — "Held:" not centred in its silver pill
 
-### Bug 1 (priority) — blank gap along the top of every illustration
+`H.heldPill` in `TcgCard.tsx` — text sits on the bottom edge of the capsule instead of
+optically centred. Per-energy `heldPillTop` in `HGSS_LAYOUT`.
+
+---
+
+### Bug 1 — blank gap along the top of every illustration — **FIXED**
 
 **Symptom:** on every card, all three stages, there is a light empty strip across the
 top of the art window — most visible immediately to the right of the `BASIC` /
@@ -57,27 +62,35 @@ Measured, not eyeballed:
   off the top for no reason. Once the hole reaches up under our own opaque tab, the
   source tab is hidden by it and this strip can go to ~0.
 
-**Fix (in order):**
-1. Re-punch all 21 frames: extend transparency upward from the current hole top to
-   just below the rail, across the hole's x-range, **leaving the tab capsule and its
-   taper opaque** so it overhangs the art like a real card. Per-row rule: find the
-   leftmost x where the run to the hole's right edge is uniformly near-white; that is
-   where the white band starts on that row, and the capsule is to its left.
-2. Raise `HGSS_ART_WINDOW[energy].top` and add the same amount to `.height` so the
-   bottom edge stays on the silver lip.
-3. Drop `HGSS_ART_TAB_STRIP` to the measured source-tab fraction (~0.024) or 0.
-4. Bump the template `?v=`.
-5. Verify: magenta-holder screenshot shows no uncovered hole; side-by-side against
-   the real Cyndaquil scan shows no white band; check one card per energy per stage.
+**Fixed by `tmp/hgss_repunch_hole.py`** — re-punches all 21 frames so the hole reaches
+the rail. Art tops are now 10.14-10.47%, against the real card's 10.16%.
 
-**Repro harness (rebuild it, it is scratch and was deleted):** `cardlab.html` at the
-repo root + `tmp/cardlab.tsx` rendering `<TcgCard>` from `tmp/records.json`, dumped
-from the real save. Screenshot with Playwright over `https://localhost:5173/cardlab.html?s=10`.
+Two dead ends worth not repeating, both of which *looked* fine at thumbnail size:
 
-### Bug 2 (after bug 1) — "Held:" not centred in its silver pill
+- **Per-row colour walks to find the capsule's edge.** The band is flat 254 on
+  fire/grass but textured on water, lightning and fighting, so the walk stopped at a
+  different x on every row and left ragged horizontal slivers of template under the
+  rail. The capsule sits identically on all 21 frames, so the taper is now read
+  **once** off `basic-fire.webp` (its flat white band makes the silhouette
+  unambiguous) and reused for every frame.
+- **Starting that walk on the hole's right edge.** That column is the frame's bevel,
+  nowhere near the band colour, so the walk exited immediately and most rows were
+  never punched at all. Sample and start `BAND_INSET` in from the edge.
 
-`H.heldPill` in `TcgCard.tsx` — text sits on the bottom edge of the capsule instead of
-optically centred. Per-energy `heldPillTop` in `HGSS_LAYOUT`.
+`HGSS_ART_WINDOW` heights carry **+0.10 over the measured alpha bbox**: without it the
+box rounds a device pixel short at some widths and leaves a hairline of bare hole along
+the bottom. The overshoot hides behind the opaque silver lip.
+
+`HGSS_ART_TAB_STRIP` dropped 0.1157 -> **0.024**, the real amount of source-card stage
+tab in the crops. The old value shaved ~13% off the top of every illustration.
+
+Template cache is now **`?v=11`**.
+
+**Verification harness (scratch — rebuild it):** `cardlab.html` at the repo root +
+`tmp/cardlab.tsx` render `<TcgCard>` straight from `tmp/records.json`. A Playwright
+script paints the art holder magenta: any magenta left on screen is hole the art fails
+to cover. A second builds a contact sheet of just the tab/art junction. Checked clean
+on 12 species covering all 7 energies and all 3 stages.
 
 ---
 
