@@ -36,14 +36,39 @@ no gap, no overhang past the frame, no stretching or changed aspect. Compare aga
   different sets put the illustration box at different heights, so one fixed
   `HGSS_ART_TAB_STRIP` cannot be right for all of them.
 
-**Diagnosis steps (in order):**
-1. Render one card large and measure, in page pixels, where the art's opaque content
-   starts vs where the hole starts. Do not eyeball it.
-2. Check a source crop directly (e.g. Caterpie `dp1`/`hgss1` jpg) — how much of its
-   top is card frame vs illustration, and does that vary by set?
-3. If it varies: stop cropping by a fixed fraction. Either re-cut the illustrations
-   with a tighter top bound, or fit by the art's own content box.
-4. Re-verify across at least one card per energy AND per stage before shipping.
+**DIAGNOSED 2026-07-30 — it is the template, not the art.**
+
+Measured, not eyeballed:
+
+- The art image **does** fill the transparent hole completely. Painting the art
+  holder magenta and screenshotting shows zero uncovered magenta. `HGSS_ART_WINDOW`
+  matches each template's alpha bbox exactly.
+- The hole itself is punched **~26px too low**. Profiling `basic-grass.webp` down
+  column x=60%: the silver rail ends at y≈154 (10.4%), then there is a band of
+  **flat opaque white (lum 254, alpha 255) from y≈156 to y≈181**, and only at
+  y=182 (12.30%) does alpha go to 0. That white band is the "gap".
+- On a real HGSS card the art starts at **10.16%** of card height — immediately
+  below the rail, with the stage-tab capsule *overhanging the artwork*. Measured on
+  `HGSS_Card_Templates/actualcards/en_US-HGSS1-061-cyndaquil.jpg` (734×1024), art top
+  y=104 at every column sampled. Ours starts at 12.30%. That 2.1pp is the gap.
+- Second, smaller error: `HGSS_ART_TAB_STRIP = 0.1157` is far too aggressive. The
+  source crops only contain ~10px of 423 (**~2.4%**) of the source card's own stage
+  tab — e.g. `public/cards/gen4/hgss1/57.jpg`. Zooming 13% shaves real illustration
+  off the top for no reason. Once the hole reaches up under our own opaque tab, the
+  source tab is hidden by it and this strip can go to ~0.
+
+**Fix (in order):**
+1. Re-punch all 21 frames: extend transparency upward from the current hole top to
+   just below the rail, across the hole's x-range, **leaving the tab capsule and its
+   taper opaque** so it overhangs the art like a real card. Per-row rule: find the
+   leftmost x where the run to the hole's right edge is uniformly near-white; that is
+   where the white band starts on that row, and the capsule is to its left.
+2. Raise `HGSS_ART_WINDOW[energy].top` and add the same amount to `.height` so the
+   bottom edge stays on the silver lip.
+3. Drop `HGSS_ART_TAB_STRIP` to the measured source-tab fraction (~0.024) or 0.
+4. Bump the template `?v=`.
+5. Verify: magenta-holder screenshot shows no uncovered hole; side-by-side against
+   the real Cyndaquil scan shows no white band; check one card per energy per stage.
 
 **Repro harness (rebuild it, it is scratch and was deleted):** `cardlab.html` at the
 repo root + `tmp/cardlab.tsx` rendering `<TcgCard>` from `tmp/records.json`, dumped
