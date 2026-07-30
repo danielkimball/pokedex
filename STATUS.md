@@ -7,6 +7,55 @@
 
 ---
 
+## ▶ IN PROGRESS — art does not fit the frame window (2026-07-30)
+
+**Read this first. Two open bugs from Dan's review of commit `bed8b8e`.**
+
+### Bug 1 (priority) — blank gap along the top of every illustration
+
+**Symptom:** on every card, all three stages, there is a light empty strip across the
+top of the art window — most visible immediately to the right of the `BASIC` /
+`STAGE 1` tab where the tab overhangs the art. The illustration sits too low / too
+short inside the hole. Introduced (or exposed) by `HGSS_ART_TAB_STRIP` in
+`src/components/ui/TcgCard.tsx`, added in `bed8b8e` to crop the source card's own
+stage tab out of the top of the crop.
+
+**Target:** the art fills the transparent hole exactly, like a real HGSS card —
+no gap, no overhang past the frame, no stretching or changed aspect. Compare against
+`HGSS_Card_Templates/actualcards/en_US-HGSS1-011-shuckle.jpg` and
+`en_US-HGSS1-061-cyndaquil.jpg`, plus the real Caterpie (HGSS 57/123) Dan sent.
+
+**Knobs involved:**
+- `HGSS_ART_TAB_STRIP` / `HGSS_ART_ZOOM` — the bottom-anchored zoom (`transform:
+  scale()` + `transformOrigin: '50% 100%'`) on the `<img>` in `HgssTcgCard`.
+- `HGSS_ART_WINDOW` — per-energy hole rect, measured from the template alpha. Verified
+  2026-07-30 to match the alpha bbox exactly, and each hole is a solid rectangle.
+- Source crops: `public/cards/gen4/<set>/<num>.jpg`, cut at
+  `(0.040, 0.075, 0.960, 0.490)` of the source card by `tmp/gen4_download_crop.py`.
+  **Suspect:** that crop is not uniform in what it captures above the illustration —
+  different sets put the illustration box at different heights, so one fixed
+  `HGSS_ART_TAB_STRIP` cannot be right for all of them.
+
+**Diagnosis steps (in order):**
+1. Render one card large and measure, in page pixels, where the art's opaque content
+   starts vs where the hole starts. Do not eyeball it.
+2. Check a source crop directly (e.g. Caterpie `dp1`/`hgss1` jpg) — how much of its
+   top is card frame vs illustration, and does that vary by set?
+3. If it varies: stop cropping by a fixed fraction. Either re-cut the illustrations
+   with a tighter top bound, or fit by the art's own content box.
+4. Re-verify across at least one card per energy AND per stage before shipping.
+
+**Repro harness (rebuild it, it is scratch and was deleted):** `cardlab.html` at the
+repo root + `tmp/cardlab.tsx` rendering `<TcgCard>` from `tmp/records.json`, dumped
+from the real save. Screenshot with Playwright over `https://localhost:5173/cardlab.html?s=10`.
+
+### Bug 2 (after bug 1) — "Held:" not centred in its silver pill
+
+`H.heldPill` in `TcgCard.tsx` — text sits on the bottom edge of the capsule instead of
+optically centred. Per-energy `heldPillTop` in `HGSS_LAYOUT`.
+
+---
+
 ## What this app is
 
 Personal multi-gen Pokedex that:
