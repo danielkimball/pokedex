@@ -13,15 +13,16 @@
 
 import type { PokemonRecord } from '../../db/schema';
 import { SPECIES } from '../../core/constants/species';
-import { TYPES, SPECIES_TYPES } from '../../core/constants/types';
 import { MOVES } from '../../core/constants/moves';
 import { MOVE_PP, MOVE_TYPE } from '../../core/constants/moves-data';
-import { EVOLUTIONS } from '../../core/constants/evolutions';
 import { NATURES } from '../../core/constants/natures';
 import { ABILITIES } from '../../core/constants/abilities';
 import { getItemName } from '../../core/constants/items';
 import { defaultSpriteUrl, monSpriteUrl, monCardArt } from '../../core/constants/games';
-import { TYPE_TO_TCG_ENERGY, tcgEnergyUrl } from '../../core/constants/energies';
+import { tcgEnergyUrlForGen } from '../../core/constants/energies';
+import {
+  GEN_MAX_DEX, getTcgEnergy, primaryType, resolveHgssTemplate, stageLabel, tcgStageLabel,
+} from '../../core/constants/tcg-card';
 
 /** Art-window coordinates per template (Gen 1 PNGs; each has its own ~1% offsets). */
 const ART_WINDOW: Record<string, { left: number; top: number; width: number; height: number }> = {
@@ -50,15 +51,16 @@ const GEN4_ART_WINDOW = { left: 11.0, top: 13.5, width: 78.0, height: 36.0 };
  */
 const GEN2_ART_WINDOW = { left: 11.0, top: 16.0, width: 78.0, height: 28.0 };
 
-/** HeartGold / SoulSilver games that use the HGSS-era PNG templates. */
-const HGSS_GAMES = new Set(['HeartGold', 'SoulSilver']);
-
 /**
- * Art window per basic template (transparent hole). Tops sit below the BASIC
- * tab (~12.3%) so the badge stays opaque. Measured after 2026-07-11 reprocess
- * of all Desktop HGSS_Card_Templates basics (HP removed from sources).
+ * Art window per energy (transparent hole). Tops sit below the stage tab
+ * (~12.3%) so the badge stays opaque. Measured after the 2026-07-11 reprocess
+ * of all pokedex HGSS_Card_Templates basics (HP removed from sources).
+ *
+ * Stage 1 / Stage 2 frames are derived from those same basics (only the tab
+ * lettering differs — see tmp/hgss_make_stages.py), so one window per energy
+ * covers all three stages.
  */
-const HGSS_BASIC_ART_WINDOW: Record<string, { left: number; top: number; width: number; height: number }> = {
+const HGSS_ART_WINDOW: Record<string, { left: number; top: number; width: number; height: number }> = {
   fire:      { left: 7.06, top: 12.30, width: 85.78, height: 40.07 },
   lightning: { left: 6.50, top: 12.30, width: 86.91, height: 41.08 },
   grass:     { left: 7.06, top: 12.30, width: 85.78, height: 42.03 },
@@ -67,7 +69,7 @@ const HGSS_BASIC_ART_WINDOW: Record<string, { left: number; top: number; width: 
   psychic:   { left: 6.50, top: 12.30, width: 86.91, height: 42.57 },
   colorless: { left: 6.50, top: 12.30, width: 86.91, height: 42.16 },
 };
-const HGSS_BASIC_ART_DEFAULT = HGSS_BASIC_ART_WINDOW.fire;
+const HGSS_ART_DEFAULT = HGSS_ART_WINDOW.fire;
 
 /**
  * Text anchors per template. Silver lip / bottom rule Y differ slightly across
@@ -131,34 +133,16 @@ const HGSS_LAYOUT: Record<string, {
   },
 };
 
-/** Full classic Basic energy set under public/cards/gen4/templates/. */
-const HGSS_BASIC_ENERGIES = new Set([
-  'fire', 'lightning', 'grass', 'water', 'fighting', 'psychic', 'colorless',
-]);
-
 /**
- * Resolve an HGSS real-PNG template if one exists for this stage + energy.
- * Filenames: public/cards/gen4/templates/{basic|stage1|stage2}-{energy}.png
+ * The gen4 illustrations were cropped at (0.040, 0.075, 0.960, 0.490) of the
+ * source card, which keeps the source card's OWN stage tab in the top strip —
+ * `(0.123 - 0.075) / (0.490 - 0.075)` of the crop. Against the CSS placeholder
+ * that read as a nice partial tab, but the real templates bake their own tab,
+ * so the leftover ghosts through it ("STAGE 1 · Evolves from Bulbasaur" under
+ * a Stage 2 badge). Zoom the art from its bottom edge to push that strip out.
  */
-function resolveHgssTemplate(
-  game: string | null | undefined,
-  energyKey: string,
-  stage: string,
-): string | null {
-  if (!game || !HGSS_GAMES.has(game)) return null;
-  const stageKey =
-    stage === 'Basic' ? 'basic' :
-    stage === 'Stage 1' ? 'stage1' :
-    stage === 'Stage 2' ? 'stage2' : null;
-  if (!stageKey) return null;
-  if (stageKey === 'basic' && HGSS_BASIC_ENERGIES.has(energyKey)) {
-    // ?v= bumps when templates are reprocessed (art hole / corners).
-    return `/cards/gen4/templates/${stageKey}-${energyKey}.png?v=9`;
-  }
-  return null;
-}
-
-const energy = tcgEnergyUrl;
+const HGSS_ART_TAB_STRIP = 0.1157;
+const HGSS_ART_ZOOM = 1 / (1 - HGSS_ART_TAB_STRIP);
 
 const SUBTITLE_POS: Record<string, { top: string; left: string; right: string }> = {
   lightning:  { top: '55.2%', left: '13%', right: '7%' },
@@ -176,8 +160,6 @@ const WEAKNESS: Record<string, string> = {
   Ground: 'Water', Flying: 'Electric', Psychic: 'Bug', Bug: 'Fire',
   Rock: 'Water', Ghost: 'Psychic', Dragon: 'Ice',
 };
-
-const GEN_MAX_DEX: Record<number, number> = { 1: 151, 2: 251, 3: 386, 4: 493 };
 
 /** Which game maps to which template directory (Gen 1 done; later gens are placeholders). */
 const TEMPLATE_DIR: Record<string, string> = {
@@ -197,49 +179,6 @@ const TEMPLATE_COLORS: Record<string, { light: string; mid: string; dark: string
   darkness:  { light: '#5a4663', mid: '#332537', dark: '#0e0712' },
   metal:     { light: '#ddddea', mid: '#a8a8b8', dark: '#525260' },
 };
-
-function primaryType(species: number): string {
-  const pair = SPECIES_TYPES[species];
-  return pair && pair[0] >= 0 ? TYPES[pair[0]] : 'Normal';
-}
-
-function getTcgEnergy(species: number): string {
-  return TYPE_TO_TCG_ENERGY[primaryType(species)] ?? 'colorless';
-}
-
-function stageLabel(species: number, generation: number): string {
-  const maxDex = GEN_MAX_DEX[generation] ?? 493;
-  const chain = (EVOLUTIONS[species]?.chain ?? [species]).filter(d => d <= maxDex);
-  const idx = chain.indexOf(species);
-  return idx <= 0 ? 'Basic' : idx === 1 ? 'Stage 1' : 'Stage 2';
-}
-
-/**
- * Gen 1–4 baby Pokémon. In the TCG, babies are Basic and evolve into *another*
- * Basic (not Stage 1) — e.g. Pichu → Pikachu (HS 78 is Basic), then Raichu is Stage 1.
- * Used only for HGSS card-template selection so frames match real cards.
- */
-const TCG_BABY_SPECIES = new Set([
-  172, 173, 174, 175, // Pichu, Cleffa, Igglybuff, Togepi
-  236, 238, 239, 240, // Tyrogue, Smoochum, Elekid, Magby
-  298, 360,           // Azurill, Wynaut
-  406, 433, 438, 439, 440, 446, 447, 458, // Gen 4 babies
-]);
-
-/** TCG stage for HGSS template filenames (basic / stage1 / stage2). */
-function tcgStageLabel(species: number, generation: number): string {
-  const maxDex = GEN_MAX_DEX[generation] ?? 493;
-  const chain = (EVOLUTIONS[species]?.chain ?? [species]).filter(d => d <= maxDex);
-  const idx = chain.indexOf(species);
-  if (idx <= 0) return 'Basic';
-  // Evolving from a baby does not advance stage (classic TCG baby rule).
-  let stage = 0;
-  for (let i = 1; i <= idx; i++) {
-    if (TCG_BABY_SPECIES.has(chain[i - 1]!)) continue;
-    stage += 1;
-  }
-  return stage <= 0 ? 'Basic' : stage === 1 ? 'Stage 1' : 'Stage 2';
-}
 
 function approxHp(level: number): number {
   return Math.min(120, Math.max(30, Math.round((level * 2 + 12) / 10) * 10));
@@ -330,11 +269,14 @@ function CssTemplate({ energyKey, gen }: { energyKey: string; gen: number }) {
 function HgssTcgCard({
   record,
   templateUrl,
+  energyKey,
 }: {
   record: PokemonRecord;
   templateUrl: string;
+  energyKey: string;
 }) {
   const gen = record.generation ?? 4;
+  const energy = (type: string) => tcgEnergyUrlForGen(type, gen);
   const speciesName = SPECIES[record.species] ?? `#${record.species}`;
   const title = record.nickname && record.nickname.toLowerCase() !== speciesName.toLowerCase()
     ? record.nickname : speciesName;
@@ -367,9 +309,8 @@ function HgssTcgCard({
     ['SPA', record.evs.spa], ['SPD', record.evs.spd], ['SPE', record.evs.spe],
   ];
 
-  const energyFromTpl = templateUrl.match(/basic-([a-z]+)\.png/)?.[1] ?? 'fire';
-  const win = HGSS_BASIC_ART_WINDOW[energyFromTpl] ?? HGSS_BASIC_ART_DEFAULT;
-  const lay = HGSS_LAYOUT[energyFromTpl] ?? HGSS_LAYOUT.fire;
+  const win = HGSS_ART_WINDOW[energyKey] ?? HGSS_ART_DEFAULT;
+  const lay = HGSS_LAYOUT[energyKey] ?? HGSS_LAYOUT.fire;
 
   // Meta sits immediately after the name (same header band), not pushed right.
   const metaBits = [
@@ -402,6 +343,10 @@ function HgssTcgCard({
             height: '100%',
             objectFit: 'cover',
             objectPosition: 'center center',
+            // Anchored at the bottom edge, so the zoom only eats the source
+            // card's stage tab off the top (see HGSS_ART_TAB_STRIP).
+            transform: `scale(${HGSS_ART_ZOOM})`,
+            transformOrigin: '50% 100%',
           }}
           onError={(e) => { e.currentTarget.src = defaultSpriteUrl(record.species); }}
         />
@@ -486,12 +431,13 @@ function HgssTcgCard({
 
 export function TcgCard({ record }: { record: PokemonRecord }) {
   const gen = record.generation ?? 1;
-  const energyKey = getTcgEnergy(record.species);
+  const energy = (type: string) => tcgEnergyUrlForGen(type, gen);
+  const energyKey = getTcgEnergy(record.species, gen);
   // HGSS frames follow TCG stage (Pikachu = Basic), not game evo index.
   const stage = tcgStageLabel(record.species, gen);
   const hgssTpl = resolveHgssTemplate(record.game, energyKey, stage);
   if (hgssTpl) {
-    return <HgssTcgCard record={record} templateUrl={hgssTpl} />;
+    return <HgssTcgCard record={record} templateUrl={hgssTpl} energyKey={energyKey} />;
   }
 
   // Gen 4 stores the real ability id; Gen 3 stores only the slot index (needs a

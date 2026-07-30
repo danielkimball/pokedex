@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from 'fs';
 import { parseSaveFile, saveSummary } from '../core/parser/save-file';
 import { SPECIES } from '../core/constants/species';
 
-const SAVE_PATH = '/Users/dankimball/Desktop/Pokemon HeartGold Version.dsv';
+const SAVE_PATH = '/Users/dankimball/Projects/personal/pokedex/game_saves/Pokemon HeartGold Version.dsv';
 const HAS_SAVE = existsSync(SAVE_PATH);
 
 // Read lazily: describe.skipIf only skips the it() blocks, not the callback

@@ -1,5 +1,5 @@
 /**
- * Regression tests against the real HeartGold .dsv on the Desktop.
+ * Regression tests against the real HeartGold .dsv in ~/pokedex/game_saves.
  * Skips if the file is missing (CI).
  */
 import { describe, it, expect } from 'vitest';
@@ -12,7 +12,7 @@ import { countJohtoBadges, countKantoBadges } from '../core/constants/progressio
 
 const DESKTOP_SAV = resolve(
   process.env.HOME || '',
-  'Desktop/Pokemon HeartGold Version.dsv',
+  'Projects/personal/pokedex/game_saves/Pokemon HeartGold Version.dsv',
 );
 
 const hasSave = existsSync(DESKTOP_SAV);

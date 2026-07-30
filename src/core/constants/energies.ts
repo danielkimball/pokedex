@@ -8,6 +8,11 @@
  * one icon style.
  */
 
+/**
+ * The 1999 Base Set fold. Correct for Gen 1 cards; later eras re-typed a few
+ * of these (see `tcgEnergyForGen`), so prefer that helper anywhere a card is
+ * being rendered for a specific generation.
+ */
 export const TYPE_TO_TCG_ENERGY: Record<string, string> = {
   Electric: 'lightning',
   Fire: 'fire',
@@ -23,10 +28,44 @@ export const TYPE_TO_TCG_ENERGY: Record<string, string> = {
   Lightning: 'lightning', Colorless: 'colorless',
 };
 
+/**
+ * Era corrections to the Base Set fold.
+ *
+ * EX Ruby & Sapphire (2003) moved every Poison-type Pokemon out of Grass and
+ * into Psychic, and that is still how they were printed through the Gen 4
+ * D&P / Platinum / HGSS blocks — so an HGSS Ekans is a Psychic card, not a
+ * Grass one. Gen 1 and Gen 2 cards keep the original Grass fold.
+ *
+ * Steel -> Metal and Dark -> Darkness (Neo Genesis, 2000) are NOT applied
+ * here: we have no Metal/Darkness energy icon or card frame yet, and routing
+ * those types to a key with no assets would drop the affected Pokemon back to
+ * the CSS placeholder. They stay on Colorless until those assets exist.
+ */
+const ERA_TYPE_OVERRIDES: Record<number, Record<string, string>> = {
+  3: { Poison: 'psychic' },
+};
+
+/** TCG energy for a game type, as that type was printed in `generation`'s era. */
+export function tcgEnergyForGen(type: string, generation: number): string {
+  if (generation >= 3) {
+    const era = ERA_TYPE_OVERRIDES[3][type];
+    if (era) return era;
+  }
+  return TYPE_TO_TCG_ENERGY[type] ?? 'colorless';
+}
+
 /** Bump when energy icon PNGs are replaced so clients fetch the new asset. */
 const ENERGY_CACHE_VER = '2';
 
-export function tcgEnergyUrl(type: string): string {
-  const file = TYPE_TO_TCG_ENERGY[type] ?? 'colorless';
+function energyAsset(file: string): string {
   return `/cards/gen1/energies/${file}.png?v=${ENERGY_CACHE_VER}`;
+}
+
+export function tcgEnergyUrl(type: string): string {
+  return energyAsset(TYPE_TO_TCG_ENERGY[type] ?? 'colorless');
+}
+
+/** Era-correct energy icon — use on cards, where the printing year matters. */
+export function tcgEnergyUrlForGen(type: string, generation: number): string {
+  return energyAsset(tcgEnergyForGen(type, generation));
 }

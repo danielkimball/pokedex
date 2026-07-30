@@ -25,3 +25,10 @@ dist-ssr
 
 # Local test fixtures and scratch (personal save data)
 tmp/
+
+# Personal save files and raw card-template sources (repo is public)
+game_saves/
+HGSS_Card_Templates/
+Gen1CardTemplates/
+pokemon_card_examples/
+energyImages/

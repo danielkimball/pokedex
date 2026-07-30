@@ -44,7 +44,10 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // webp covers the HGSS card frames — 21 of them at ~200 KB, vs the
+        // 2.7 MB PNGs they replaced. The gen1-4 illustrations stay out of the
+        // precache (they are .jpg) and are fetched on demand.
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/raw\.githubusercontent\.com\/PokeAPI\/sprites\/.*/,
