@@ -18,10 +18,11 @@ import { MOVE_PP, MOVE_TYPE } from '../../core/constants/moves-data';
 import { NATURES } from '../../core/constants/natures';
 import { ABILITIES } from '../../core/constants/abilities';
 import { getItemName } from '../../core/constants/items';
-import { defaultSpriteUrl, monSpriteUrl, monCardArt } from '../../core/constants/games';
+import { defaultSpriteUrl, monSpriteUrl, monCardArt, spriteUrl } from '../../core/constants/games';
 import { tcgEnergyUrlForGen } from '../../core/constants/energies';
 import {
-  GEN_MAX_DEX, getTcgEnergy, primaryType, resolveHgssTemplate, stageLabel, tcgStageLabel,
+  GEN_MAX_DEX, getTcgEnergy, preEvolutionOf, primaryType, resolveHgssTemplate,
+  stageLabel, tcgStageLabel,
 } from '../../core/constants/tcg-card';
 
 /** Art-window coordinates per template (Gen 1 PNGs; each has its own ~1% offsets). */
@@ -277,10 +278,12 @@ function HgssTcgCard({
   record,
   templateUrl,
   energyKey,
+  stage,
 }: {
   record: PokemonRecord;
   templateUrl: string;
   energyKey: string;
+  stage: string;
 }) {
   const gen = record.generation ?? 4;
   const energy = (type: string) => tcgEnergyUrlForGen(type, gen);
@@ -318,6 +321,9 @@ function HgssTcgCard({
 
   const win = HGSS_ART_WINDOW[energyKey] ?? HGSS_ART_DEFAULT;
   const lay = HGSS_LAYOUT[energyKey] ?? HGSS_LAYOUT.fire;
+  // Gated on the TCG stage, not just on having a pre-evolution: the baby rule
+  // keeps Pikachu Basic, and a Basic card never says "Evolves from".
+  const preEvo = stage === 'Basic' ? null : preEvolutionOf(record.species, gen);
 
   // Meta sits immediately after the name (same header band), not pushed right.
   const metaBits = [
@@ -360,6 +366,21 @@ function HgssTcgCard({
       </div>
 
       <img src={templateUrl} alt="" style={{ ...S.template, zIndex: 1 }} aria-hidden />
+
+      {/* Evolution badge — see EVO_BADGE. Sits over the art's top-left corner,
+          under the stage tab, exactly where the D&P-era illustrations already
+          carry one, so it lands on top of that leftover rather than beside it. */}
+      {preEvo !== null && (
+        <div style={H.evoRow}>
+          <img
+            src={spriteUrl(preEvo, record.game)}
+            alt={SPECIES[preEvo] ?? `#${preEvo}`}
+            style={H.evoSprite}
+            onError={(e) => { e.currentTarget.src = defaultSpriteUrl(preEvo); }}
+          />
+          <span style={H.evoPill}>Evolves from {SPECIES[preEvo] ?? `#${preEvo}`}</span>
+        </div>
+      )}
 
       <div style={H.nameRow}>
         <span style={H.name}>
@@ -444,7 +465,9 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
   const stage = tcgStageLabel(record.species, gen);
   const hgssTpl = resolveHgssTemplate(record.game, energyKey, stage);
   if (hgssTpl) {
-    return <HgssTcgCard record={record} templateUrl={hgssTpl} energyKey={energyKey} />;
+    return (
+      <HgssTcgCard record={record} templateUrl={hgssTpl} energyKey={energyKey} stage={stage} />
+    );
   }
 
   // Gen 4 stores the real ability id; Gen 3 stores only the slot index (needs a
@@ -754,6 +777,40 @@ const H = {
     fontSize: '4.9cqw', fontWeight: 700 as const, color: INK, lineHeight: 1,
     // Original cards pack multi-digit HP tight (HP100 / HP130).
     letterSpacing: '-0.07em',
+  },
+
+  /**
+   * Evolution badge: pre-evo sprite in a disc + "Evolves from X" on a silver
+   * pill, over the art's top-left corner just below the stage tab.
+   *
+   * The Gen 4 illustrations come from ~21 sets across three blocks, and the
+   * D&P-era ones (Great Encounters etc.) print their pre-evolution circle
+   * *overhanging the artwork* — so the crop carries the bottom of that circle
+   * into our card. HGSS-era cards instead put it in the header beside the name.
+   * Putting ours where D&P puts its own covers that leftover instead of sitting
+   * next to it, and reads as native on HGSS-sourced art too.
+   *
+   * Geometry: the leftover occupies roughly x 7-18%, y 10.4-17% of the card;
+   * the stage tab already hides everything above 12.2%.
+   */
+  evoRow: {
+    position: 'absolute' as const, left: '7.4%', top: '12.2%',
+    zIndex: 2, display: 'flex', alignItems: 'center' as const, gap: '0.8cqw',
+  },
+  evoSprite: {
+    width: '11cqw', height: '11cqw', objectFit: 'contain' as const,
+    borderRadius: '50%', flexShrink: 0,
+    background: 'radial-gradient(circle at 38% 32%, #ffffff 0%, #efece1 62%, #cfc7b2 100%)',
+    boxShadow: '0 0 0 0.35cqw #cdc6b4, 0 0 0 0.62cqw rgba(90,70,25,0.42), 0 0.3cqw 0.7cqw rgba(0,0,0,0.35)',
+  },
+  evoPill: {
+    marginLeft: '0.7cqw',
+    padding: '0.5cqw 1.6cqw',
+    borderRadius: '2cqw',
+    background: 'linear-gradient(180deg, #fbfaf6 0%, #e6e1d3 52%, #cfc8b5 100%)',
+    boxShadow: '0 0 0 0.18cqw rgba(90,70,25,0.38), 0 0.25cqw 0.6cqw rgba(0,0,0,0.3)',
+    fontSize: '2.15cqw', fontWeight: 700 as const, fontStyle: 'italic' as const,
+    color: '#2a2218', whiteSpace: 'nowrap' as const, letterSpacing: '0.01em',
   },
 
   // Centered ON the silver art-frame lip.

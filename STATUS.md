@@ -3,16 +3,48 @@
 **Purpose:** Hand-off doc for new AI/human sessions. Keep this updated when shipping work.  
 **Repo:** `danielkimball/pokedex` · **Deploy:** Vercel (pushes to `main`)  
 **Local:** `npm run dev` → `https://localhost:5173/` (HTTPS via `@vitejs/plugin-basic-ssl`)  
-**Last updated:** 2026-07-30
+**Last updated:** 2026-07-31
 
 ---
 
-## ▶ IN PROGRESS — one bug left (2026-07-30)
+## ▶ IN PROGRESS — one bug left (2026-07-31)
 
-### Bug 2 (OPEN, next up) — "Held:" not centred in its silver pill
+### Bug 3 (OPEN, next up) — "Held:" not centred in its silver pill
 
 `H.heldPill` in `TcgCard.tsx` — text sits on the bottom edge of the capsule instead of
 optically centred. Per-energy `heldPillTop` in `HGSS_LAYOUT`.
+
+---
+
+### Bug 2 — leftover pre-evolution circle from D&P-era art — **FIXED 2026-07-31**
+
+The Gen 4 illustrations come from ~21 sets across three blocks, and the blocks do not
+lay out the pre-evolution the same way:
+
+- **D&P block** (Diamond & Pearl … Stormfront, incl. Great Encounters): the pre-evo
+  circle **overhangs the artwork** at the top-left, so our crop carries the bottom of
+  that circle into the card. Dan spotted it on Arbok (`dp4/33`).
+- **HGSS block**: the pre-evo sits in the header, top-left, beside the name — above
+  the crop, so nothing leaks in.
+
+Fix: render our own evolution badge — pre-evo sprite in a disc plus an "Evolves from X"
+pill — **where D&P puts its own**, over the art's top-left corner just under the stage
+tab. It lands on top of the leftover instead of beside it, so one element both adds the
+feature Dan wanted and hides the artifact, with no extra crop off the illustration.
+Cropping it away instead would have cost ~17% off the top of every D&P-sourced card.
+
+- `preEvolutionOf()` in `tcg-card.ts` walks the **game** chain, so Raichu evolves from
+  Pikachu, not Pichu.
+- The badge is gated on `stage !== 'Basic'`, so the TCG baby rule holds: Pikachu and
+  Clefairy are Basic cards and show no evolves-from line. Pinned by a test that sweeps
+  all 493 species.
+- `H.evoRow` / `H.evoSprite` / `H.evoPill` in `TcgCard.tsx`. Geometry is sized to the
+  leftover: it occupies roughly x 7-18%, y 10.4-17% of the card, and the stage tab
+  already hides everything above 12.2%.
+
+**Not done, and probably fine:** no new templates. Dan wondered whether differing source
+sets would force per-set frames — they do not. Only the pre-evo placement differed, and
+one badge covers every block.
 
 ---
 

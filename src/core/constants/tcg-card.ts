@@ -74,6 +74,19 @@ export function tcgStageLabel(species: number, generation: number): string {
 }
 
 /**
+ * The species this one evolves from, or null for a Basic.
+ *
+ * Walks the game chain rather than the TCG stage, so Raichu evolves from
+ * Pikachu (not from Pichu) even though the TCG baby rule keeps Pikachu Basic.
+ */
+export function preEvolutionOf(species: number, generation: number): number | null {
+  const maxDex = GEN_MAX_DEX[generation] ?? 493;
+  const chain = (EVOLUTIONS[species]?.chain ?? []).filter(d => d <= maxDex);
+  const idx = chain.indexOf(species);
+  return idx > 0 ? chain[idx - 1]! : null;
+}
+
+/**
  * Resolve an HGSS real card frame if one exists for this stage + energy.
  * Filenames: public/cards/gen4/templates/{basic|stage1|stage2}-{energy}.webp
  */

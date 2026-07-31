@@ -10,7 +10,9 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { getTcgEnergy, resolveHgssTemplate, tcgStageLabel } from '../core/constants/tcg-card';
+import {
+  getTcgEnergy, preEvolutionOf, resolveHgssTemplate, tcgStageLabel,
+} from '../core/constants/tcg-card';
 import { tcgEnergyForGen } from '../core/constants/energies';
 import { SPECIES } from '../core/constants/species';
 
@@ -18,6 +20,11 @@ const PUBLIC_DIR = resolve(__dirname, '../../public');
 const TEMPLATE_DIR = resolve(PUBLIC_DIR, 'cards/gen4/templates');
 const ENERGIES = ['fire', 'lightning', 'grass', 'water', 'fighting', 'psychic', 'colorless'];
 const STAGES = ['basic', 'stage1', 'stage2'];
+/** Gen 1-4 babies — mirrors TCG_BABY_SPECIES in tcg-card.ts. */
+const BABIES = new Set([
+  172, 173, 174, 175, 236, 238, 239, 240, 298, 360,
+  406, 433, 438, 439, 440, 446, 447, 458,
+]);
 
 /** "/cards/gen4/templates/basic-grass.webp?v=11" -> absolute path under public/. */
 function templatePath(url: string): string {
@@ -79,6 +86,40 @@ describe('tcgStageLabel', () => {
     expect(tcgStageLabel(172, 4)).toBe('Basic');    // Pichu
     expect(tcgStageLabel(25, 4)).toBe('Basic');     // Pikachu
     expect(tcgStageLabel(26, 4)).toBe('Stage 1');   // Raichu
+  });
+});
+
+describe('preEvolutionOf', () => {
+  it('names the immediate game pre-evolution', () => {
+    expect(preEvolutionOf(24, 4)).toBe(23);    // Arbok  <- Ekans
+    expect(preEvolutionOf(3, 4)).toBe(2);      // Venusaur <- Ivysaur
+    expect(preEvolutionOf(169, 4)).toBe(42);   // Crobat <- Golbat
+  });
+
+  it('skips the baby: Raichu evolves from Pikachu, not Pichu', () => {
+    expect(preEvolutionOf(26, 4)).toBe(25);
+    expect(preEvolutionOf(36, 4)).toBe(35);    // Clefable <- Clefairy
+  });
+
+  it('returns null for a species with nothing before it', () => {
+    expect(preEvolutionOf(1, 4)).toBeNull();   // Bulbasaur
+    expect(preEvolutionOf(172, 4)).toBeNull(); // Pichu
+  });
+
+  /**
+   * The badge is gated on the TCG stage, so a baby's evolution never claims to
+   * evolve from it — HS-era Pikachu is a Basic card with no "Evolves from" line
+   * even though Pichu exists.
+   */
+  it('pairs with tcgStageLabel so no Basic card shows an evolves-from line', () => {
+    const wrong: string[] = [];
+    for (let s = 1; s <= 493; s++) {
+      if (tcgStageLabel(s, 4) === 'Basic' && preEvolutionOf(s, 4) !== null) {
+        // Only acceptable when the thing before it is a baby (Pikachu, Clefairy…).
+        if (!BABIES.has(preEvolutionOf(s, 4)!)) wrong.push(`#${s} ${SPECIES[s]}`);
+      }
+    }
+    expect(wrong).toEqual([]);
   });
 });
 
