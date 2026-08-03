@@ -7,9 +7,29 @@
 
 ---
 
-## ▶ IN PROGRESS — one bug left (2026-07-31)
+## ▶ IN PROGRESS (2026-08-03)
 
-### Bug 3 (OPEN, next up) — "Held:" not centred in its silver pill
+### Blocked on Dan — blank templates for the other eras
+
+**`TEMPLATES-NEEDED.md` at the repo root is the shopping list.** 87 blanks, 21 already
+done (Gen 4 HGSS). Generated from the art maps, so every row is a frame something
+actually lands on, and each names two real common (non-holo) cards to strip.
+
+Why: Gen 4 art comes from three blocks with different frames (D&P, Platinum, HGSS) and
+everything currently renders on the HGSS frame. 28 of Dan's 174 cards are on the wrong
+one — Charizard is Arceus-era art in an HGSS frame, which is what he flagged. Gen 1 has
+Basic frames only; Gen 2 has art but no frames; Gen 3 has neither.
+
+Agreed order: Platinum (21) → D&P (11) → Gen 1 stages (14) → Gen 2 Neo (21) → Gen 3 EX (20).
+
+When blanks land, per block: process to 1062×1480 + punch the hole
+(`tmp/hgss_repunch_hole.py`), derive stage variants if only Basic is supplied
+(`tmp/hgss_make_stages.py`), measure `HGSS_ART_WINDOW` + `HGSS_LAYOUT` equivalents, then
+add **per-block routing** — `resolveHgssTemplate` currently keys on game only, and needs
+to key on the source set of `monCardArt`, mapped through the block table in
+`TEMPLATES-NEEDED.md`.
+
+### Bug 3 (OPEN) — "Held:" not centred in its silver pill
 
 `H.heldPill` in `TcgCard.tsx` — text sits on the bottom edge of the capsule instead of
 optically centred. Per-energy `heldPillTop` in `HGSS_LAYOUT`.
