@@ -78,18 +78,22 @@ function buildBlocks(pokemon: Pokemon): Uint8Array {
   writeU16(view, 0x02, pokemon.heldItem);
   writeU32(view, 0x04, pokemon.otId);
   writeU32(view, 0x08, pokemon.experience);
-  writeU8(view, 0x14, pokemon.friendship);
-  writeU8(view, 0x15, pokemon.ability);
-  writeU8(view, 0x16, pokemon.markings);
-  writeU8(view, 0x17, pokemon.language);
-  writeU8(view, 0x18, pokemon.evHp);
-  writeU8(view, 0x19, pokemon.evAtk);
-  writeU8(view, 0x1A, pokemon.evDef);
-  writeU8(view, 0x1B, pokemon.evSpe);
-  writeU8(view, 0x1C, pokemon.evSpa);
-  writeU8(view, 0x1D, pokemon.evSpd);
-  writeU8(view, 0x1E, pokemon.contestCool);
-  writeU8(view, 0x1F, pokemon.contestBeauty);
+  writeU8(view, 0x0C, pokemon.friendship);
+  writeU8(view, 0x0D, pokemon.ability);
+  writeU8(view, 0x0E, pokemon.markings);
+  writeU8(view, 0x0F, pokemon.language);
+  writeU8(view, 0x10, pokemon.evHp);
+  writeU8(view, 0x11, pokemon.evAtk);
+  writeU8(view, 0x12, pokemon.evDef);
+  writeU8(view, 0x13, pokemon.evSpe);
+  writeU8(view, 0x14, pokemon.evSpa);
+  writeU8(view, 0x15, pokemon.evSpd);
+  writeU8(view, 0x16, pokemon.contestCool);
+  writeU8(view, 0x17, pokemon.contestBeauty);
+  writeU8(view, 0x18, pokemon.contestCute);
+  writeU8(view, 0x19, pokemon.contestSmart);
+  writeU8(view, 0x1A, pokemon.contestTough);
+  writeU8(view, 0x1B, pokemon.contestSheen);
 
   // Block B (offset 32-63): Attacks
   const bBase = 0x20;
@@ -102,12 +106,10 @@ function buildBlocks(pokemon: Pokemon): Uint8Array {
   writeU8(view, bBase + 0x0A, pokemon.pp3);
   writeU8(view, bBase + 0x0B, pokemon.pp4);
 
-  // PP ups packed into one byte
-  const ppUps = (pokemon.ppUp1 & 3)
-    | ((pokemon.ppUp2 & 3) << 2)
-    | ((pokemon.ppUp3 & 3) << 4)
-    | ((pokemon.ppUp4 & 3) << 6);
-  writeU8(view, bBase + 0x0C, ppUps);
+  writeU8(view, bBase + 0x0C, pokemon.ppUp1);
+  writeU8(view, bBase + 0x0D, pokemon.ppUp2);
+  writeU8(view, bBase + 0x0E, pokemon.ppUp3);
+  writeU8(view, bBase + 0x0F, pokemon.ppUp4);
 
   // IVs bit-packed into 32 bits
   let ivWord = 0;
@@ -120,12 +122,19 @@ function buildBlocks(pokemon: Pokemon): Uint8Array {
   if (pokemon.isEgg) ivWord |= (1 << 30);
   if (pokemon.isNicknamed) ivWord |= (1 << 31);
   writeU32(view, bBase + 0x10, ivWord >>> 0);
+  const formFlags = (pokemon.fatefulEncounter ? 1 : 0)
+    | (((pokemon.gender ?? 2) & 0x03) << 1)
+    | (((pokemon.form ?? 0) & 0x1F) << 3);
+  writeU8(view, bBase + 0x18, formFlags);
+  writeU8(view, bBase + 0x19, pokemon.shinyLeaf ?? 0);
+  writeU16(view, bBase + 0x1C, pokemon.eggLocationPt);
+  writeU16(view, bBase + 0x1E, pokemon.metLocationPt);
 
   // Block C (offset 64-95): Condition
   const cBase = 0x40;
   const nicknameBytes = encodeNickname(pokemon.nickname);
   blocks.set(nicknameBytes, cBase + 0x00);
-  writeU8(view, cBase + 0x18, pokemon.originGame);
+  writeU8(view, cBase + 0x17, pokemon.originGame);
 
   // Block D (offset 96-127): Origins
   const dBase = 0x60;
@@ -147,12 +156,12 @@ function buildBlocks(pokemon: Pokemon): Uint8Array {
   writeU16(view, dBase + 0x16, pokemon.eggLocationDP);
   writeU16(view, dBase + 0x18, pokemon.metLocationDP);
   writeU8(view, dBase + 0x1A, pokemon.pokerus);
-  writeU8(view, dBase + 0x1B, pokemon.pokeball);
+  writeU8(view, dBase + 0x1B, pokemon.pokeballDPPt ?? (pokemon.pokeball <= 16 ? pokemon.pokeball : 4));
 
-  const metLevelByte = pokemon.metLevel & 0x7F;
+  const metLevelByte = (pokemon.metLevel & 0x7F) | ((pokemon.otGender & 1) << 7);
   writeU8(view, dBase + 0x1C, metLevelByte);
-  writeU8(view, dBase + 0x1D, (pokemon.otGender & 1) << 7);
-  writeU8(view, dBase + 0x1E, pokemon.encounterType);
+  writeU8(view, dBase + 0x1D, pokemon.encounterType);
+  writeU8(view, dBase + 0x1E, pokemon.pokeballHGSS ?? 0);
 
   return blocks;
 }

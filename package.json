@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "data:hgss-kanto": "node scripts/build-hgss-kanto-data.mjs",
+    "data:items": "node scripts/build-gen1-4-item-data.mjs && node scripts/build-gen4-item-ids.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

@@ -9,6 +9,11 @@
  *   - which PokeAPI sprite set to render so each gen's Pokemon looks era-correct
  */
 
+import { GEN1_CARD_ART } from './gen1-card-art';
+import { gen2CardArt } from './gen2-card-art';
+import { gen4CardArt } from './gen4-card-art';
+import { gen4FormSpriteId, gen4FormSpriteSuffix } from './forms-gen4';
+
 export type Game =
   | 'Red' | 'Blue' | 'Yellow'
   | 'Gold' | 'Silver' | 'Crystal'
@@ -66,10 +71,6 @@ export function defaultSpriteUrl(dex: number): string {
   return `${SPRITE_BASE}/${dex}.png`;
 }
 
-import { GEN1_CARD_ART } from './gen1-card-art';
-import { gen2CardArt } from './gen2-card-art';
-import { gen4CardArt } from './gen4-card-art';
-
 /**
  * Original WotC TCG illustration (Base/Jungle/Fossil) for a Gen 1 species, if one
  * exists — the painted card art with its scene, dropped into the card's art window.
@@ -101,6 +102,7 @@ const SURFING_PIKACHU_SPRITE = '/sprites/pikachu-surf.png';
 /** Minimal shape needed to pick a Pokemon's card sprite. */
 export interface SpriteSource {
   species: number;
+  form?: number;
   game?: string | null;
   generation?: number | null;
   isShiny?: boolean;
@@ -120,6 +122,16 @@ export function monSpriteUrl(rec: SpriteSource): string {
     rec.moves?.includes(SURF_MOVE_ID)
   ) {
     return SURFING_PIKACHU_SPRITE;
+  }
+  if (rec.generation === 4 && (rec.form ?? 0) > 0) {
+    const suffix = gen4FormSpriteSuffix(rec.species, rec.form);
+    const info = rec.game ? GAME_INFO[rec.game as Game] : undefined;
+    if (suffix && info) {
+      const shinySeg = rec.isShiny && info.hasShiny ? '/shiny' : '';
+      return `${SPRITE_BASE}/versions/${info.spritePath}${shinySeg}/${rec.species}-${suffix}.png`;
+    }
+    const formId = gen4FormSpriteId(rec.species, rec.form);
+    if (formId) return `${SPRITE_BASE}${rec.isShiny ? '/shiny' : ''}/${formId}.png`;
   }
   return spriteUrl(rec.species, rec.game, rec.isShiny);
 }

@@ -18,6 +18,7 @@ import { MOVE_PP, MOVE_TYPE } from '../../core/constants/moves-data';
 import { NATURES } from '../../core/constants/natures';
 import { ABILITIES } from '../../core/constants/abilities';
 import { getItemName } from '../../core/constants/items';
+import { gen4FormName } from '../../core/constants/forms-gen4';
 import { defaultSpriteUrl, monSpriteUrl, monCardArt, spriteUrl } from '../../core/constants/games';
 import { tcgEnergyUrlForGen } from '../../core/constants/energies';
 import {
@@ -308,6 +309,7 @@ function HgssTcgCard({
     : record.location === 'daycare' ? ['Day Care']
     : [`Box ${record.containerIndex + 1}`, `Slot ${record.slotIndex + 1}`];
   const natureName = NATURES[record.nature] ?? null;
+  const formName = gen === 4 ? gen4FormName(record.species, record.form ?? 0) : null;
   const heldItemName = record.heldItem > 0 ? getItemName(record.heldItem) : null;
 
   const ivCells: [string, number][] = [
@@ -328,6 +330,7 @@ function HgssTcgCard({
   // Meta sits immediately after the name (same header band), not pushed right.
   const metaBits = [
     `Lv${record.level}`,
+    formName,
     natureName,
   ].filter(Boolean).join(' · ');
 
@@ -501,6 +504,7 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
       ? 'Day Care'
       : `Box ${record.containerIndex + 1}, Slot ${record.slotIndex + 1}`;
   const natureName = showNature ? (NATURES[record.nature] ?? null) : null;
+  const formName = gen === 4 ? gen4FormName(record.species, record.form ?? 0) : null;
   const abilityName = showAbility ? (ABILITIES[record.ability] ?? null) : null;
   const heldItemName = showHeldItem ? getItemName(record.heldItem) : null;
 
@@ -558,6 +562,7 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
         <span style={S.lv}> Lv{record.level}</span>
         {abilityName && <span style={S.abilityInline}> {'·'} {abilityName}</span>}
         {natureName && <span style={S.natureInline}> {'·'} {natureName}</span>}
+        {formName && <span style={S.natureInline}> {'·'} {formName}</span>}
       </div>
 
       {/* HP (red) + energy */}

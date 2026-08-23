@@ -16,10 +16,101 @@ import { getGender } from '../../core/utils/gender';
 import { ORIGIN_GAMES } from '../../core/constants/origin-games';
 import { spriteUrl, defaultSpriteUrl, monSpriteUrl, monCardArt, gameLabel, genLabel } from '../../core/constants/games';
 import { gen4CatchView, gen4Tips, GEN4_GAME_LABEL } from '../../core/constants/gen4-dex-data';
+import {
+  HGSS_KANTO_DATA,
+  type HgssAcquisitionMethod,
+  type HgssEvolutionPath,
+  type HgssKantoEntry,
+} from '../../core/constants/hgss-kanto-data.generated';
 import { LEARNSETS_HGSS, type Gen4Learnset } from '../../core/constants/learnsets-gen4';
 import type { PokedexShellContext } from '../layout/PokedexShell';
 
 const ROMAN_PANEL = ['', 'I', 'II', 'III', 'IV'];
+
+function EvolutionMethod({
+  path,
+  direction,
+  navigate,
+}: {
+  path: HgssEvolutionPath;
+  direction: 'from' | 'to';
+  navigate: ReturnType<typeof useNavigate>;
+}) {
+  const species = direction === 'from' ? path.from : path.to;
+  const label = direction === 'from' ? `Evolve ${SPECIES[species] ?? `#${species}`}` : `Into ${SPECIES[species] ?? `#${species}`}`;
+  return (
+    <div style={dp.evolutionRoute}>
+      <button type="button" style={dp.evolutionPokemon} onClick={() => navigate(`/dex/${species}`)}>{label}</button>
+      <span style={dp.evolutionText}>{path.text}</span>
+      {path.itemSlug && (
+        <button
+          type="button"
+          style={dp.itemLink}
+          onClick={() => navigate(`/items?item=${encodeURIComponent(path.itemSlug!)}&game=heartgold`)}
+        >
+          Item locations ▸
+        </button>
+      )}
+    </div>
+  );
+}
+
+function AcquisitionMethod({ method }: { method: HgssAcquisitionMethod }) {
+  const details = [method.method, method.levels ? `Lv. ${method.levels}` : null, method.chance].filter(Boolean).join(' · ');
+  return (
+    <div style={dp.catchLine}>
+      <span style={dp.catchArea}>{method.area}</span>
+      <span style={dp.catchDetail}>{details}</span>
+      {method.conditions.length > 0 && <span style={dp.catchConditions}>{method.conditions.join(' · ')}</span>}
+    </div>
+  );
+}
+
+function HgssKantoAcquisition({
+  entry,
+  navigate,
+}: {
+  entry: HgssKantoEntry;
+  navigate: ReturnType<typeof useNavigate>;
+}) {
+  const sameMethods = JSON.stringify(entry.versions.heartgold) === JSON.stringify(entry.versions.soulsilver);
+  const groups = sameMethods
+    ? [{ label: 'HeartGold + SoulSilver', methods: entry.versions.heartgold }]
+    : [
+        { label: 'HeartGold', methods: entry.versions.heartgold },
+        { label: 'SoulSilver', methods: entry.versions.soulsilver },
+      ];
+
+  return (
+    <>
+      {groups.map(group => (
+        <div key={group.label} style={dp.catchBlock}>
+          <div style={dp.catchGame}>{group.label}</div>
+          {group.methods.length > 0
+            ? group.methods.map((method, index) => <AcquisitionMethod key={`${method.area}-${method.method}-${index}`} method={method} />)
+            : <div style={dp.noDirect}>No direct encounter in this version; use the evolution route below or trade/transfer.</div>}
+        </div>
+      ))}
+
+      {entry.evolvesFrom.length > 0 && (
+        <div style={dp.evolutionGroup}>
+          <div style={dp.evolutionHeading}>Obtain by evolution</div>
+          {entry.evolvesFrom.map((path, index) => (
+            <EvolutionMethod key={`from-${path.from}-${index}`} path={path} direction="from" navigate={navigate} />
+          ))}
+        </div>
+      )}
+      {entry.evolvesTo.length > 0 && (
+        <div style={dp.evolutionGroup}>
+          <div style={dp.evolutionHeading}>Evolves further</div>
+          {entry.evolvesTo.map((path, index) => (
+            <EvolutionMethod key={`to-${path.to}-${index}`} path={path} direction="to" navigate={navigate} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
 
 /** veekun gen-4 machine numbers: 1-92 are TMs, 101-108 are HM01-08. */
 function machineLabel(n: number): string {
@@ -246,7 +337,8 @@ export function DexEntryScreen() {
 
   useEffect(() => {
     const catchView = gen4CatchView(dexNum, panelGen);
-    const tips = panelGen === 4 ? gen4Tips(dexNum) : [];
+    const hgssKantoEntry = panelGen === 4 && dexNum >= 1 && dexNum <= 151 ? HGSS_KANTO_DATA[dexNum] : null;
+    const tips = panelGen === 4 && !hgssKantoEntry ? gen4Tips(dexNum) : [];
     const rec = selectedRecord;
     const learnset = panelGen === 4 ? LEARNSETS_HGSS[dexNum] : undefined;
 
@@ -291,9 +383,11 @@ export function DexEntryScreen() {
 
         {/* Where to catch */}
         <div style={dp.section}>
-          <div style={dp.sectionTitle}>Where to Catch · Gen {ROMAN_PANEL[panelGen]}</div>
+          <div style={dp.sectionTitle}>{hgssKantoEntry ? 'Where to Get · HeartGold / SoulSilver' : `Where to Catch · Gen ${ROMAN_PANEL[panelGen]}`}</div>
           {panelGen !== 4 ? (
             <div style={dp.muted}>Detailed catch data is Gen IV only for now.</div>
+          ) : hgssKantoEntry ? (
+            <HgssKantoAcquisition entry={hgssKantoEntry} navigate={navigate} />
           ) : catchView.catchable.length === 0 ? (
             <div style={dp.muted}>
               {catchView.tradeOnly.length > 0 ? 'Trade / transfer only this generation.' : 'Obtained by evolution.'}
@@ -1138,6 +1232,63 @@ const dp = {
   catchDetail: {
     fontSize: '9px',
     color: '#6a5d4a',
+  },
+  catchConditions: {
+    fontSize: '9px',
+    color: '#8f5d19',
+    lineHeight: 1.35,
+  },
+  noDirect: {
+    fontSize: '10px',
+    color: '#777',
+    padding: '3px 0 4px 8px',
+    borderLeft: '2px solid #9994',
+  },
+  evolutionGroup: {
+    marginTop: '8px',
+    paddingTop: '7px',
+    borderTop: '1px solid #8f001422',
+  },
+  evolutionHeading: {
+    fontSize: '9px',
+    color: '#8f0014',
+    fontWeight: 'bold' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.6px',
+    marginBottom: '4px',
+  },
+  evolutionRoute: {
+    display: 'grid',
+    gridTemplateColumns: 'auto 1fr',
+    gap: '2px 7px',
+    alignItems: 'baseline' as const,
+    padding: '4px 0',
+  },
+  evolutionPokemon: {
+    border: 'none',
+    background: 'none',
+    color: '#8f0014',
+    padding: 0,
+    font: 'inherit',
+    fontSize: '10px',
+    fontWeight: 'bold' as const,
+    cursor: 'pointer',
+  },
+  evolutionText: {
+    fontSize: '10px',
+    color: '#333',
+  },
+  itemLink: {
+    gridColumn: '2',
+    justifySelf: 'start' as const,
+    border: 'none',
+    background: 'none',
+    color: '#a46600',
+    padding: 0,
+    font: 'inherit',
+    fontSize: '9px',
+    textDecoration: 'underline',
+    cursor: 'pointer',
   },
   tradeOnly: {
     fontSize: '9px',

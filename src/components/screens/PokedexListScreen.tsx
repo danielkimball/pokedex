@@ -323,6 +323,14 @@ export function PokedexListScreen() {
             </button>
             <button
               type="button"
+              style={s.modeSegOff}
+              onClick={() => navigate('/items')}
+              title="Generation I–IV item acquisition guide"
+            >
+              Items
+            </button>
+            <button
+              type="button"
               style={isStory ? s.modeSegOn : s.modeSegOff}
               onClick={() => {
                 if (!isStory) {

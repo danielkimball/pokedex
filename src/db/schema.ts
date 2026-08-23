@@ -52,6 +52,9 @@ export interface PokemonRecord {
   nature: number;
   ability: number;
   heldItem: number;
+  /** Species-specific form index from the source game, when available. */
+  form?: number;
+  gender?: number;
   moves: [number, number, number, number];
   ivs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
   evs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
@@ -100,6 +103,8 @@ export interface HomePokemonRecord {
   nature: number;
   ability: number;
   heldItem: number;
+  form?: number;
+  gender?: number;
   moves: [number, number, number, number];
   ivs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
   evs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };

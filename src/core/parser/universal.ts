@@ -35,6 +35,8 @@ export interface UniversalMon {
   nature: number; // 0-24 (Gen 3); 0 when not applicable (Gen 1/2)
   ability: number; // 0 when not applicable
   heldItem: number; // 0 when not applicable (Gen 1)
+  /** Species-specific form index when the source format exposes one. */
+  form?: number;
   moves: [number, number, number, number];
   ivs: UniversalStats; // 0-31 (Gen 3) or DV*2-ish scaled; stored as-read
   evs: UniversalStats; // best-effort

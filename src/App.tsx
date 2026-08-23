@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { PokedexShell } from './components/layout/PokedexShell';
 import { HomeScreen } from './components/screens/HomeScreen';
@@ -11,6 +12,8 @@ import { ExportScreen } from './components/screens/ExportScreen';
 import { PokemonHomeScreen } from './components/screens/PokemonHomeScreen';
 import { useInitializeApp } from './hooks/usePokedexRegistry';
 
+const ItemsScreen = lazy(() => import('./components/screens/ItemsScreen').then(module => ({ default: module.ItemsScreen })));
+
 const router = createBrowserRouter([
   {
     path: '/',
@@ -19,6 +22,7 @@ const router = createBrowserRouter([
       { index: true, element: <HomeScreen /> },
       { path: 'dex', element: <PokedexListScreen /> },
       { path: 'dex/:number', element: <DexEntryScreen /> },
+      { path: 'items', element: <Suspense fallback={<div style={{ padding: 20 }}>Loading item research…</div>}><ItemsScreen /></Suspense> },
       { path: 'saves', element: <SaveManagerScreen /> },
       { path: 'saves/:id/boxes', element: <BoxViewScreen /> },
       { path: 'saves/:id/party', element: <PartyViewScreen /> },

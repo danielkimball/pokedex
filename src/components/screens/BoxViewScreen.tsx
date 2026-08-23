@@ -9,6 +9,7 @@ import { reorganizeBoxes, type BoxSortCriteria } from '../../state/actions/reorg
 import { writeBackToLinkedFile, supportsWriteback } from '../../state/actions/save-to-file';
 import { monSpriteUrl, defaultSpriteUrl } from '../../core/constants/games';
 import type { PokemonRecord } from '../../db/schema';
+import { gen4FormName } from '../../core/constants/forms-gen4';
 
 const BOXES_TOTAL = 18;
 const COLS = 6;
@@ -450,6 +451,11 @@ export function BoxViewScreen() {
             <div style={styles.popupInfo}>
               #{String(selectedPokemon.species).padStart(3, '0')} {SPECIES[selectedPokemon.species]}
             </div>
+            {gen4FormName(selectedPokemon.species, selectedPokemon.form ?? 0) && (
+              <div style={styles.popupInfo}>
+                Form: {gen4FormName(selectedPokemon.species, selectedPokemon.form ?? 0)}
+              </div>
+            )}
             <div style={styles.popupInfo}>
               Lv. {selectedPokemon.level}
             </div>

@@ -39,6 +39,8 @@ function toHomeRecord(
     nature: record.nature,
     ability: record.ability,
     heldItem: record.heldItem,
+    form: record.form,
+    gender: record.gender,
     moves: record.moves,
     ivs: record.ivs,
     evs: record.evs,

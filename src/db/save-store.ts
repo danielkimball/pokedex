@@ -95,6 +95,8 @@ export async function refreshSaveAfterModification(saveId: string, newRawData: A
       nature: p.nature,
       ability: p.ability,
       heldItem: p.heldItem,
+      form: p.form ?? 0,
+      gender: p.gender,
       moves: [p.move1, p.move2, p.move3, p.move4],
       ivs: { hp: p.ivHp, atk: p.ivAtk, def: p.ivDef, spe: p.ivSpe, spa: p.ivSpa, spd: p.ivSpd },
       evs: { hp: p.evHp, atk: p.evAtk, def: p.evDef, spe: p.evSpe, spa: p.evSpa, spd: p.evSpd },

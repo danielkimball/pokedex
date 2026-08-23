@@ -77,6 +77,10 @@ export interface Pokemon {
   ivSpd: number;
   isEgg: boolean;
   isNicknamed: boolean;
+  /** Gen IV form index stored in the PK4 form/gender byte. */
+  form?: number;
+  fatefulEncounter?: boolean;
+  shinyLeaf?: number;
 
   // Block C - Condition
   nickname: string;
@@ -92,6 +96,8 @@ export interface Pokemon {
   metLocationPt: number;
   pokerus: number;
   pokeball: number;
+  pokeballDPPt?: number;
+  pokeballHGSS?: number;
   metLevel: number;
   otGender: number; // 0 = male, 1 = female
   encounterType: number;
@@ -162,21 +168,22 @@ export function parsePokemon(raw: Uint8Array): Pokemon | null {
   const otIdPublic = otId & 0xFFFF;
   const otSid = (otId >>> 16) & 0xFFFF;
   const experience = readU32(blockView, 0x08);
-  const friendship = readU8(blockView, 0x14);
-  const ability = readU8(blockView, 0x15);
-  const markings = readU8(blockView, 0x16);
-  const language = readU8(blockView, 0x17);
-  const evHp = readU8(blockView, 0x18);
-  const evAtk = readU8(blockView, 0x19);
-  const evDef = readU8(blockView, 0x1A);
-  const evSpe = readU8(blockView, 0x1B);
-  const evSpa = readU8(blockView, 0x1C);
-  const evSpd = readU8(blockView, 0x1D);
-  const contestCool = readU8(blockView, 0x1E);
-  const contestBeauty = readU8(blockView, 0x1F);
-
-  // Block A continued (some fields overflow into what might seem like B space,
-  // but within the 32-byte block A boundary)
+  const friendship = readU8(blockView, 0x0C);
+  const ability = readU8(blockView, 0x0D);
+  const markings = readU8(blockView, 0x0E);
+  const language = readU8(blockView, 0x0F);
+  const evHp = readU8(blockView, 0x10);
+  const evAtk = readU8(blockView, 0x11);
+  const evDef = readU8(blockView, 0x12);
+  const evSpe = readU8(blockView, 0x13);
+  const evSpa = readU8(blockView, 0x14);
+  const evSpd = readU8(blockView, 0x15);
+  const contestCool = readU8(blockView, 0x16);
+  const contestBeauty = readU8(blockView, 0x17);
+  const contestCute = readU8(blockView, 0x18);
+  const contestSmart = readU8(blockView, 0x19);
+  const contestTough = readU8(blockView, 0x1A);
+  const contestSheen = readU8(blockView, 0x1B);
 
   // Parse Block B (offset 32-63): Attacks
   const bBase = 0x20;
@@ -188,12 +195,10 @@ export function parsePokemon(raw: Uint8Array): Pokemon | null {
   const pp2 = readU8(blockView, bBase + 0x09);
   const pp3 = readU8(blockView, bBase + 0x0A);
   const pp4 = readU8(blockView, bBase + 0x0B);
-  const ppUpByte1 = readU8(blockView, bBase + 0x0C);
-  const ppUpByte2 = readU8(blockView, bBase + 0x0D);
-  const ppUp1 = ppUpByte1 & 0x03;
-  const ppUp2 = (ppUpByte1 >>> 2) & 0x03;
-  const ppUp3 = (ppUpByte1 >>> 4) & 0x03;
-  const ppUp4 = (ppUpByte1 >>> 6) & 0x03;
+  const ppUp1 = readU8(blockView, bBase + 0x0C);
+  const ppUp2 = readU8(blockView, bBase + 0x0D);
+  const ppUp3 = readU8(blockView, bBase + 0x0E);
+  const ppUp4 = readU8(blockView, bBase + 0x0F);
 
   // IV bit-packed in 32 bits at Block B offset 0x10 (absolute 0x30)
   const ivWord = readU32(blockView, bBase + 0x10);
@@ -205,11 +210,18 @@ export function parsePokemon(raw: Uint8Array): Pokemon | null {
   const ivSpd = extractBits(ivWord, 25, 5);
   const isEgg = !!(ivWord & (1 << 30));
   const isNicknamed = !!(ivWord & (1 << 31));
+  const formFlags = readU8(blockView, bBase + 0x18);
+  const fatefulEncounter = (formFlags & 1) !== 0;
+  const gender = (formFlags >>> 1) & 0x03;
+  const form = formFlags >>> 3;
+  const shinyLeaf = readU8(blockView, bBase + 0x19);
+  const eggLocationPt = readU16(blockView, bBase + 0x1C);
+  const metLocationPt = readU16(blockView, bBase + 0x1E);
 
   // Parse Block C (offset 64-95): Condition
   const cBase = 0x40;
   const nickname = decodeNickname(blocks, cBase + 0x00);
-  const originGame = readU8(blockView, cBase + 0x18);
+  const originGame = readU8(blockView, cBase + 0x17);
 
   // Parse Block D (offset 96-127): Origins
   const dBase = 0x60;
@@ -230,32 +242,20 @@ export function parsePokemon(raw: Uint8Array): Pokemon | null {
   const eggLocationDP = readU16(blockView, dBase + 0x16);
   const metLocationDP = readU16(blockView, dBase + 0x18);
   const pokerus = readU8(blockView, dBase + 0x1A);
-  const pokeball = readU8(blockView, dBase + 0x1B);
+  const pokeballDPPt = readU8(blockView, dBase + 0x1B);
 
   const metLevelByte = readU8(blockView, dBase + 0x1C);
-  const metLevelFlags = readU8(blockView, dBase + 0x1D);
   const metLevel = metLevelByte & 0x7F;
-  const otGender = (metLevelFlags >>> 7) & 1;
-  const encounterType = readU8(blockView, dBase + 0x1E);
-
-  const eggLocationPt = readU16(blockView, dBase + 0x1E); // Pt/HGSS extended location
-  const metLocationPt = readU16(blockView, dBase + 0x1E); // shared field reuse
-
-  // Contest stats continued from block A
-  const contestCute = readU8(blockView, 0x1E);   // These are actually unused space
-  const contestSmart = readU8(blockView, 0x1F);   // in block A
-  const contestTough = 0;
-  const contestSheen = 0;
+  const otGender = (metLevelByte >>> 7) & 1;
+  const encounterType = readU8(blockView, dBase + 0x1D);
+  const pokeballHGSS = readU8(blockView, dBase + 0x1E);
+  const pokeball = Math.max(pokeballDPPt, pokeballHGSS);
 
   // Derived values
   const nature = pid % 25;
   const pidHigh = (pid >>> 16) & 0xFFFF;
   const pidLow = pid & 0xFFFF;
   const isShiny = ((otIdPublic ^ otSid) ^ (pidHigh ^ pidLow)) < 8;
-
-  // Gender determination would need species gender ratio data
-  // For now, use a simplified approach
-  const gender = 2; // default genderless, will be resolved with species data
 
   // Parse party battle stats if present
   let battleStats: BattleStats | undefined;
@@ -288,11 +288,11 @@ export function parsePokemon(raw: Uint8Array): Pokemon | null {
     pp1, pp2, pp3, pp4,
     ppUp1, ppUp2, ppUp3, ppUp4,
     ivHp, ivAtk, ivDef, ivSpe, ivSpa, ivSpd,
-    isEgg, isNicknamed,
+    isEgg, isNicknamed, form, fatefulEncounter, shinyLeaf,
     nickname, originGame,
     otName, dateEggReceived, dateMet,
     eggLocationDP, metLocationDP, eggLocationPt, metLocationPt,
-    pokerus, pokeball, metLevel, otGender, encounterType,
+    pokerus, pokeball, pokeballDPPt, pokeballHGSS, metLevel, otGender, encounterType,
     nature, isShiny, gender,
     battleStats,
   };

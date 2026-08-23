@@ -22,6 +22,8 @@ export interface RecordLike {
   nature: number;
   ability: number;
   heldItem: number;
+  form?: number;
+  gender?: number;
   moves: [number, number, number, number];
   ivs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
   evs: { hp: number; atk: number; def: number; spe: number; spa: number; spd: number };
@@ -68,6 +70,7 @@ export function recordToPokemon(record: RecordLike, options?: { includeBattleSta
     checksum: 0, // writer recomputes
     species: record.species,
     heldItem: record.heldItem,
+    form: record.form ?? 0,
     otId: record.otId,
     otIdPublic,
     otSid: record.otSid,
@@ -124,7 +127,7 @@ export function recordToPokemon(record: RecordLike, options?: { includeBattleSta
     encounterType: 0,
     nature: record.nature,
     isShiny: record.isShiny,
-    gender: 2,
+    gender: record.gender ?? 2,
     battleStats,
   };
 }

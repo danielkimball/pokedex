@@ -8,6 +8,7 @@ import { StatBar } from '../ui/StatBar';
 import { transferToHome } from '../../state/actions/transfer';
 import { monSpriteUrl, defaultSpriteUrl } from '../../core/constants/games';
 import type { PokemonRecord } from '../../db/schema';
+import { gen4FormName } from '../../core/constants/forms-gen4';
 
 const styles = {
   container: {
@@ -197,6 +198,9 @@ function PartyCard({
 
         <div style={styles.typeRow}>
           {types.map(t => <TypeBadge key={t} type={t} />)}
+          {gen4FormName(mon.species, mon.form ?? 0) && (
+            <span style={styles.shinyBadge}>{gen4FormName(mon.species, mon.form ?? 0)}</span>
+          )}
           {mon.isShiny && <span style={styles.shinyBadge}>SHINY</span>}
         </div>
 
