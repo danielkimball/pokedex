@@ -21,11 +21,12 @@ export const TYPE_TO_TCG_ENERGY: Record<string, string> = {
   Psychic: 'psychic', Ghost: 'psychic',
   Fighting: 'fighting', Rock: 'fighting', Ground: 'fighting',
   Normal: 'colorless', Flying: 'colorless', Dragon: 'colorless',
-  // Steel + Dark have no Base Set counterpart; fall back to Colorless until we
-  // add Neo-era Metal/Darkness energies alongside the Gen 2 frame.
+  // Video-game Steel + Dark have no Base Set counterpart. Their era-specific
+  // frame routing still falls back to Colorless until those frames are added.
   Steel: 'colorless', Dark: 'colorless',
   // Accept TCG names directly for code that already speaks TCG.
   Lightning: 'lightning', Colorless: 'colorless',
+  Metal: 'metal', Darkness: 'darkness',
 };
 
 /**
@@ -37,9 +38,8 @@ export const TYPE_TO_TCG_ENERGY: Record<string, string> = {
  * Grass one. Gen 1 and Gen 2 cards keep the original Grass fold.
  *
  * Steel -> Metal and Dark -> Darkness (Neo Genesis, 2000) are NOT applied
- * here: we have no Metal/Darkness energy icon or card frame yet, and routing
- * those types to a key with no assets would drop the affected Pokemon back to
- * the CSS placeholder. They stay on Colorless until those assets exist.
+ * here because those card frames have not been built yet. Exact printed-card
+ * metadata may still request the Metal/Darkness icons directly for weaknesses.
  */
 const ERA_TYPE_OVERRIDES: Record<number, Record<string, string>> = {
   3: { Poison: 'psychic' },
@@ -55,7 +55,7 @@ export function tcgEnergyForGen(type: string, generation: number): string {
 }
 
 /** Bump when energy icon PNGs are replaced so clients fetch the new asset. */
-const ENERGY_CACHE_VER = '2';
+const ENERGY_CACHE_VER = '3';
 
 function energyAsset(file: string): string {
   return `/cards/gen1/energies/${file}.png?v=${ENERGY_CACHE_VER}`;

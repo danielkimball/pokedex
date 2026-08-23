@@ -22,6 +22,9 @@ import { gen4FormName } from '../../core/constants/forms-gen4';
 import { defaultSpriteUrl, monSpriteUrl, monCardArt, spriteUrl } from '../../core/constants/games';
 import { tcgEnergyUrlForGen } from '../../core/constants/energies';
 import {
+  gen4TcgProfile, tcgTypeKey, type Gen4TcgProfile,
+} from '../../core/constants/gen4-tcg-profiles';
+import {
   GEN_MAX_DEX, getTcgEnergy, preEvolutionOf, primaryType, resolveHgssTemplate,
   stageLabel, tcgStageLabel,
 } from '../../core/constants/tcg-card';
@@ -144,11 +147,9 @@ const HGSS_LAYOUT: Record<string, {
 };
 
 /**
- * The gen4 illustrations keep a sliver of the source card's OWN stage tab along
- * the top — measured at ~10px of 423 on the HGSS-era crops, e.g.
- * public/cards/gen4/hgss1/57.jpg. Now that the hole reaches up under our own
- * opaque tab, that sliver lands behind it and is hidden, so we only need to zoom
- * past the source's frame edge. Anything larger visibly shaves the artwork.
+ * HGSS illustration crops keep a tiny sliver of the source card's header along
+ * the top. Zoom those sources just past it; D&P/Platinum evolved crops now begin
+ * below their overhanging evolution UI and need no additional zoom.
  */
 const HGSS_ART_TAB_STRIP = 0.024;
 const HGSS_ART_ZOOM = 1 / (1 - HGSS_ART_TAB_STRIP);
@@ -270,21 +271,23 @@ function CssTemplate({ energyKey, gen }: { energyKey: string; gen: number }) {
 /**
  * HGSS-era real-PNG card (Basic Fire first; more templates as they land).
  *
- * Layer order matters: art sits UNDER the template so the baked-in BASIC badge
- * and silver frame sit cleanly on top of the illustration. The pre-cropped
- * gen4 art still includes a stage tab — we clip that top strip so it doesn't
- * ghost under the template badge.
+ * Layer order matters: art sits UNDER the template so the baked-in stage rail
+ * and silver frame sit cleanly on top of the illustration. The evolved header
+ * follows HGSS scans: previous Pokemon medallion at upper-left, then its narrow
+ * "Evolves from" line in the silver rail immediately above the artwork.
  */
 function HgssTcgCard({
   record,
   templateUrl,
   energyKey,
   stage,
+  profile,
 }: {
   record: PokemonRecord;
   templateUrl: string;
   energyKey: string;
   stage: string;
+  profile: Gen4TcgProfile | null;
 }) {
   const gen = record.generation ?? 4;
   const energy = (type: string) => tcgEnergyUrlForGen(type, gen);
@@ -298,8 +301,10 @@ function HgssTcgCard({
     type: MOVE_TYPE[id] ?? primaryType(record.species),
   }));
   const hp = approxHp(record.level);
-  const type = primaryType(record.species);
-  const weakness = WEAKNESS[type];
+  const gameType = primaryType(record.species);
+  const fallbackWeakness = WEAKNESS[gameType];
+  const weakness = profile?.weaknesses[0]
+    ?? (fallbackWeakness ? { type: fallbackWeakness } : null);
   const game = record.game ?? 'HeartGold';
   const dexMax = GEN_MAX_DEX[gen] ?? 493;
   const dex3 = String(record.species).padStart(3, '0');
@@ -361,7 +366,7 @@ function HgssTcgCard({
             objectPosition: 'center center',
             // Anchored at the bottom edge, so the zoom only eats the source
             // card's stage tab off the top (see HGSS_ART_TAB_STRIP).
-            transform: `scale(${HGSS_ART_ZOOM})`,
+            transform: profile?.era === 'hgss' ? `scale(${HGSS_ART_ZOOM})` : undefined,
             transformOrigin: '50% 100%',
           }}
           onError={(e) => { e.currentTarget.src = defaultSpriteUrl(record.species); }}
@@ -370,22 +375,25 @@ function HgssTcgCard({
 
       <img src={templateUrl} alt="" style={{ ...S.template, zIndex: 1 }} aria-hidden />
 
-      {/* Evolution badge — see EVO_BADGE. Sits over the art's top-left corner,
-          under the stage tab, exactly where the D&P-era illustrations already
-          carry one, so it lands on top of that leftover rather than beside it. */}
+      {/* HGSS evolution header: portrait in the header medallion and copy on the
+          silver rail. Neither element floats over the illustration. */}
       {preEvo !== null && (
-        <div style={H.evoRow}>
+        <>
+          <div style={H.evoPortrait}>
           <img
             src={spriteUrl(preEvo, record.game)}
             alt={SPECIES[preEvo] ?? `#${preEvo}`}
             style={H.evoSprite}
             onError={(e) => { e.currentTarget.src = defaultSpriteUrl(preEvo); }}
           />
-          <span style={H.evoPill}>Evolves from {SPECIES[preEvo] ?? `#${preEvo}`}</span>
-        </div>
+          </div>
+          <div style={H.evolvesFrom}>
+            Evolves from <strong>{SPECIES[preEvo] ?? `#${preEvo}`}</strong>
+          </div>
+        </>
       )}
 
-      <div style={H.nameRow}>
+      <div style={{ ...H.nameRow, ...(preEvo !== null ? H.nameRowEvolved : null) }}>
         <span style={H.name}>
           {title}{record.isShiny && <span style={S.shiny}> ★</span>}
         </span>
@@ -446,7 +454,10 @@ function HgssTcgCard({
         <div style={H.weakness}>
           <span style={H.infoLbl}>weakness</span>
           {weakness
-            ? <img src={energy(weakness)} alt={weakness} style={H.infoIcon} />
+            ? <span style={H.weaknessMark}>
+                <img src={energy(weakness.type)} alt={weakness.type} style={H.infoIcon} />
+                {weakness.value && <span style={H.weaknessValue}>{weakness.value}</span>}
+              </span>
             : <span style={H.infoDash}>—</span>}
         </div>
         <div style={H.location}>
@@ -463,13 +474,20 @@ function HgssTcgCard({
 export function TcgCard({ record }: { record: PokemonRecord }) {
   const gen = record.generation ?? 1;
   const energy = (type: string) => tcgEnergyUrlForGen(type, gen);
-  const energyKey = getTcgEnergy(record.species, gen);
+  const profile = gen === 4 ? gen4TcgProfile(record.species, record.game) : null;
+  const energyKey = profile ? tcgTypeKey(profile.type) : getTcgEnergy(record.species, gen);
   // HGSS frames follow TCG stage (Pikachu = Basic), not game evo index.
   const stage = tcgStageLabel(record.species, gen);
   const hgssTpl = resolveHgssTemplate(record.game, energyKey, stage);
   if (hgssTpl) {
     return (
-      <HgssTcgCard record={record} templateUrl={hgssTpl} energyKey={energyKey} stage={stage} />
+      <HgssTcgCard
+        record={record}
+        templateUrl={hgssTpl}
+        energyKey={energyKey}
+        stage={stage}
+        profile={profile}
+      />
     );
   }
 
@@ -493,8 +511,11 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
     type: MOVE_TYPE[id] ?? primaryType(record.species),
   }));
   const hp = approxHp(record.level);
-  const type = primaryType(record.species);
-  const weakness = WEAKNESS[type];
+  const gameType = primaryType(record.species);
+  const type = profile?.type ?? gameType;
+  const fallbackWeakness = WEAKNESS[gameType];
+  const weakness = profile?.weaknesses[0]
+    ?? (fallbackWeakness ? { type: fallbackWeakness } : null);
   const game = record.game ?? 'Yellow';
   const dexMax = GEN_MAX_DEX[gen] ?? 493;
   const dex3 = String(record.species).padStart(3, '0');
@@ -591,7 +612,12 @@ export function TcgCard({ record }: { record: PokemonRecord }) {
       <div style={S.info}>
         <span style={S.infoCell}>
           <span style={S.infoLbl}>weakness</span>
-          {weakness ? <img src={energy(weakness)} alt={weakness} style={S.infoIcon} /> : <span style={S.infoDash}>—</span>}
+          {weakness
+            ? <span style={S.weaknessMark}>
+                <img src={energy(weakness.type)} alt={weakness.type} style={S.infoIcon} />
+                {weakness.value && <span style={S.weaknessValue}>{weakness.value}</span>}
+              </span>
+            : <span style={S.infoDash}>—</span>}
         </span>
         <span style={{ ...S.infoCell, alignItems: 'center' as const }}>
           <span style={S.infoLbl}>location</span>
@@ -706,6 +732,8 @@ const S = {
   infoCell: { display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-start' as const, gap: '0.5cqw', minWidth: 0 },
   infoLbl: { fontSize: '1.8cqw', textTransform: 'uppercase' as const, letterSpacing: '0.5px', color: '#5a4a10' },
   infoIcon: { width: '3.6cqw', height: '3.6cqw', objectFit: 'contain' as const },
+  weaknessMark: { display: 'flex', alignItems: 'center' as const, gap: '0.7cqw' },
+  weaknessValue: { fontSize: '2.2cqw', fontWeight: 700 as const, color: INK, lineHeight: 1 },
   infoDash: { fontSize: '3cqw', color: '#5a4a10', lineHeight: 1 },
   infoVal: { fontSize: '2.6cqw', fontWeight: 700 as const, color: INK },
   infoValSmall: { fontSize: '2.3cqw', fontWeight: 700 as const, color: INK, whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const },
@@ -755,6 +783,7 @@ const H = {
     zIndex: 2, display: 'flex', alignItems: 'center' as const, gap: '1.6cqw',
     minWidth: 0, overflow: 'hidden' as const,
   },
+  nameRowEvolved: { left: '14.8%' },
   name: {
     fontSize: '5.5cqw', fontWeight: 700 as const, color: INK, lineHeight: 1.05,
     whiteSpace: 'nowrap' as const, flexShrink: 0,
@@ -784,38 +813,26 @@ const H = {
     letterSpacing: '-0.07em',
   },
 
-  /**
-   * Evolution badge: pre-evo sprite in a disc + "Evolves from X" on a silver
-   * pill, over the art's top-left corner just below the stage tab.
-   *
-   * The Gen 4 illustrations come from ~21 sets across three blocks, and the
-   * D&P-era ones (Great Encounters etc.) print their pre-evolution circle
-   * *overhanging the artwork* — so the crop carries the bottom of that circle
-   * into our card. HGSS-era cards instead put it in the header beside the name.
-   * Putting ours where D&P puts its own covers that leftover instead of sitting
-   * next to it, and reads as native on HGSS-sourced art too.
-   *
-   * Geometry: the leftover occupies roughly x 7-18%, y 10.4-17% of the card;
-   * the stage tab already hides everything above 12.2%.
-   */
-  evoRow: {
-    position: 'absolute' as const, left: '7.4%', top: '12.2%',
-    zIndex: 2, display: 'flex', alignItems: 'center' as const, gap: '0.8cqw',
+  // HGSS Stage 1/2 cards place the previous Pokemon in a compact header
+  // medallion. Its lower edge meets the art rail but does not cover the art.
+  evoPortrait: {
+    position: 'absolute' as const, left: '1.55%', top: '0.75%',
+    width: '12.4cqw', height: '12.4cqw', zIndex: 3,
+    display: 'flex', alignItems: 'center' as const, justifyContent: 'center' as const,
+    borderRadius: '50%',
+    background: 'radial-gradient(circle at 42% 36%, #fffef7 0%, #eee9d9 63%, #bab19b 100%)',
+    boxShadow: '0 0 0 0.22cqw #eee8d5, 0 0 0 0.55cqw #91866e',
+    overflow: 'hidden' as const,
   },
   evoSprite: {
-    width: '11cqw', height: '11cqw', objectFit: 'contain' as const,
-    borderRadius: '50%', flexShrink: 0,
-    background: 'radial-gradient(circle at 38% 32%, #ffffff 0%, #efece1 62%, #cfc7b2 100%)',
-    boxShadow: '0 0 0 0.35cqw #cdc6b4, 0 0 0 0.62cqw rgba(90,70,25,0.42), 0 0.3cqw 0.7cqw rgba(0,0,0,0.35)',
+    width: '10.2cqw', height: '10.2cqw', objectFit: 'contain' as const,
+    imageRendering: 'pixelated' as const,
   },
-  evoPill: {
-    marginLeft: '0.7cqw',
-    padding: '0.5cqw 1.6cqw',
-    borderRadius: '2cqw',
-    background: 'linear-gradient(180deg, #fbfaf6 0%, #e6e1d3 52%, #cfc8b5 100%)',
-    boxShadow: '0 0 0 0.18cqw rgba(90,70,25,0.38), 0 0.25cqw 0.6cqw rgba(0,0,0,0.3)',
-    fontSize: '2.15cqw', fontWeight: 700 as const, fontStyle: 'italic' as const,
-    color: '#2a2218', whiteSpace: 'nowrap' as const, letterSpacing: '0.01em',
+  evolvesFrom: {
+    position: 'absolute' as const, left: '27.5%', top: '8.15%', right: '40%',
+    zIndex: 3, fontSize: '1.85cqw', fontWeight: 600 as const,
+    fontStyle: 'italic' as const, color: '#332d25', lineHeight: 1,
+    whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const,
   },
 
   // Centered ON the silver art-frame lip.
@@ -891,6 +908,8 @@ const H = {
     color: '#5a4020',
   },
   infoIcon: { width: '3.1cqw', height: '3.1cqw', objectFit: 'contain' as const },
+  weaknessMark: { display: 'flex', alignItems: 'center' as const, gap: '0.55cqw' },
+  weaknessValue: { fontSize: '1.75cqw', fontWeight: 700 as const, color: '#2a2218', lineHeight: 1 },
   infoDash: { fontSize: '2.3cqw', color: '#5a4020', lineHeight: 1 },
   location: {
     display: 'flex', flexDirection: 'column' as const,

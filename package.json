@@ -8,6 +8,7 @@
     "build": "vite build",
     "data:hgss-kanto": "node scripts/build-hgss-kanto-data.mjs",
     "data:items": "node scripts/build-gen1-4-item-data.mjs && node scripts/build-gen4-item-ids.mjs",
+    "data:gen4-tcg": "node scripts/build-gen4-tcg-profiles.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

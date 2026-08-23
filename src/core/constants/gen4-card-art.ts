@@ -1145,17 +1145,30 @@ const GEN4_ERA_ORDER: Record<string, readonly ('dp' | 'pl' | 'hgss')[]> = {
 const GEN4_DEFAULT_ORDER = ['dp', 'pl', 'hgss'] as const;
 
 /** Bump when public/cards/gen4 crops are regenerated so browsers fetch new JPGs. */
-const GEN4_ART_CACHE_VER = '15';
+const GEN4_ART_CACHE_VER = '16';
 
-/** Pick the best era illustration for `species` given the game it came from. */
-export function gen4CardArt(species: number, game?: string | null): string | null {
+export type Gen4CardArtEra = 'dp' | 'pl' | 'hgss';
+
+export interface Gen4CardArtSource {
+  path: string;
+  era: Gen4CardArtEra;
+}
+
+/** Resolve both the illustration path and the printed-card design era. */
+export function gen4CardArtSource(species: number, game?: string | null): Gen4CardArtSource | null {
   const order = (game && GEN4_ERA_ORDER[game]) ?? GEN4_DEFAULT_ORDER;
   for (const era of order) {
     const map = era === 'hgss' ? GEN4_CARD_ART_HGSS
               : era === 'pl'   ? GEN4_CARD_ART_PL
               :                  GEN4_CARD_ART_DP;
-    const hit = map[species];
-    if (hit) return `${hit}?v=${GEN4_ART_CACHE_VER}`;
+    const path = map[species];
+    if (path) return { path, era };
   }
   return null;
+}
+
+/** Pick the best era illustration for `species` given the game it came from. */
+export function gen4CardArt(species: number, game?: string | null): string | null {
+  const source = gen4CardArtSource(species, game);
+  return source ? `${source.path}?v=${GEN4_ART_CACHE_VER}` : null;
 }

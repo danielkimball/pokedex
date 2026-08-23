@@ -16,8 +16,8 @@ const HGSS_GAMES = new Set(['HeartGold', 'SoulSilver']);
 
 /**
  * Classic energy set with real frames under public/cards/gen4/templates/.
- * Every one exists in all three stages. Metal + Darkness are still missing, so
- * Steel/Dark Pokemon stay on Colorless (see ERA_TYPE_OVERRIDES in energies.ts).
+ * Every one exists in all three stages. Metal + Darkness frames are still
+ * missing, so Steel/Dark Pokemon stay on Colorless for template selection.
  */
 const HGSS_ENERGIES = new Set([
   'fire', 'lightning', 'grass', 'water', 'fighting', 'psychic', 'colorless',

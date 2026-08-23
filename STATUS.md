@@ -7,6 +7,29 @@
 
 ---
 
+## Completed (2026-08-23) — authentic Gen IV evolution headers + Kanto TCG matchups
+
+- Gen IV cards for National Dex **001–151** now use the exact selected source
+  card's printed TCG type, weakness type, and modifier (`+10`, `+20`, `+30`, or
+  `×2`) instead of guessing from the species' primary video-game type. The data
+  is reproducibly generated from TCGdex single-card records with
+  `npm run data:gen4-tcg`; tests require complete Kanto coverage across all five
+  Gen IV games. Example: Triumphant Gengar 94 is Psychic with **Darkness ×2**.
+- Kadabra is the one explicit fallback because it had no Gen IV printing. Its
+  custom card uses the era's Psychic treatment and the selected Gen IV Alakazam
+  source's Psychic ×2 weakness.
+- Stage 1/2 presentation now follows the actual HGSS header: a compact previous-
+  Pokémon medallion at upper-left and an `Evolves from` line in the silver rail.
+  Nothing floats over the illustration. D&P/Platinum evolved art was recropped
+  below those blocks' baked-in evolution UI, removing the duplicate medallion.
+- Added printed Darkness and Metal weakness symbols and cache-busted all refreshed
+  art/icons. Visual QA covered D&P Arbok, Platinum Charizard, HGSS Gengar, and
+  Basic Magnemite at the production card size.
+- Validation: **154/154 tests pass**, production build passes, TypeScript passes,
+  and targeted lint has zero errors.
+
+---
+
 ## Completed locally (2026-08-23) — HGSS Kanto acquisition guide + Gen I–IV items
 
 - National Dex **001–151** now has a complete HeartGold/SoulSilver “Where to Get”
@@ -23,7 +46,7 @@
 - Corrected the PK4 parser/writer field layout and the 514-entry Gen IV held-item ID
   table. Generation IV form/gender flags now survive import, storage, transfer, and
   export, with named/form-specific sprites where PokeAPI provides them.
-- Validation: **148/148 tests pass** and the production build passes. Targeted lint
+- Validation: **154/154 tests pass** and the production build passes. Targeted lint
   has zero errors; full lint still reports eight pre-existing errors in DB/Dropbox/
   save-to-file modules plus two existing warnings.
 
@@ -58,7 +81,7 @@ optically centred. Per-energy `heldPillTop` in `HGSS_LAYOUT`.
 
 ---
 
-### Bug 2 — leftover pre-evolution circle from D&P-era art — **FIXED 2026-07-31**
+### Bug 2 — floating evolution UI / source-card medallion — **FIXED 2026-08-23**
 
 The Gen 4 illustrations come from ~21 sets across three blocks, and the blocks do not
 lay out the pre-evolution the same way:
@@ -69,24 +92,23 @@ lay out the pre-evolution the same way:
 - **HGSS block**: the pre-evo sits in the header, top-left, beside the name — above
   the crop, so nothing leaks in.
 
-Fix: render our own evolution badge — pre-evo sprite in a disc plus an "Evolves from X"
-pill — **where D&P puts its own**, over the art's top-left corner just under the stage
-tab. It lands on top of the leftover instead of beside it, so one element both adds the
-feature Dan wanted and hides the artifact, with no extra crop off the illustration.
-Cropping it away instead would have cost ~17% off the top of every D&P-sourced card.
+The former fix rendered another large medallion and pill over the illustration. It
+hid the baked-in D&P artifact, but it did not match the HGSS frame and looked like a
+floating UI control.
+
+Current fix:
 
 - `preEvolutionOf()` in `tcg-card.ts` walks the **game** chain, so Raichu evolves from
   Pikachu, not Pichu.
-- The badge is gated on `stage !== 'Basic'`, so the TCG baby rule holds: Pikachu and
+- The header is gated on `stage !== 'Basic'`, so the TCG baby rule holds: Pikachu and
   Clefairy are Basic cards and show no evolves-from line. Pinned by a test that sweeps
   all 493 species.
-- `H.evoRow` / `H.evoSprite` / `H.evoPill` in `TcgCard.tsx`. Geometry is sized to the
-  leftover: it occupies roughly x 7-18%, y 10.4-17% of the card, and the stage tab
-  already hides everything above 12.2%.
-
-**Not done, and probably fine:** no new templates. Dan wondered whether differing source
-sets would force per-set frames — they do not. Only the pre-evo placement differed, and
-one badge covers every block.
+- `H.evoPortrait` and `H.evolvesFrom` reproduce the HGSS Stage 1/2 header geometry:
+  medallion at upper-left, name shifted right, and narrow copy in the silver rail.
+- `scripts/recrop-gen4-card-art.py` starts evolved D&P/Platinum crops below their
+  original card UI. HGSS sources retain their taller art and tiny header-strip zoom.
+- Contact-sheet QA covers representative evolved art from all three blocks. No source
+  medallion or custom evolution element overlaps the artwork.
 
 ---
 
@@ -220,9 +242,9 @@ non-null for all 493 species × their stage, pinned by
   `vite.config.ts`. Template cache is now **`?v=10`**.
 
 **Known era gap:** Steel → Metal and Dark → Darkness (Neo, 2000) are deliberately NOT
-applied — no Metal/Darkness frame or energy icon exists, and routing those types to a
-key with no assets would drop those 26 species back to the CSS placeholder. They stay
-Colorless. Pinned by a test so it is a decision, not a bug.
+applied for frame routing: the weakness icons now exist, but the card frames do not.
+Routing those types to a missing frame would drop those 26 species back to the CSS
+placeholder, so they stay Colorless. Pinned by a test so it is a decision, not a bug.
 
 **Source templates (user-provided):** `~/Projects/personal/pokedex/HGSS_Card_Templates/`
 
@@ -293,12 +315,13 @@ replacements are welcome; drop them at the same paths and nothing else needs to 
 2. Process: resize to **1062×1480**; punch **transparent art hole** below the stage tab (~12.3% top); keep yellow corners opaque
 3. Save as `public/cards/gen4/templates/basic-{energy}.webp` (q92 WebP — see `tmp/hgss_make_stages.py`)
 4. Run `python3 tmp/hgss_make_stages.py` to derive the stage1/stage2 frames
-5. Add the energy to `HGSS_ENERGIES` in `TcgCard.tsx`
+5. Add the energy to `HGSS_ENERGIES` in `tcg-card.ts`
 6. Measure art hole + silver lip %; add `HGSS_ART_WINDOW` + `HGSS_LAYOUT` entries
-7. For Metal/Darkness also add the energy icon + wire the type in `ERA_TYPE_OVERRIDES` (`energies.ts`)
+7. For Metal/Darkness wire the video-game type in `ERA_TYPE_OVERRIDES` (`energies.ts`);
+   their weakness icons already exist
 8. Bump the template `?v=`; hard-refresh; push `main` for Vercel
 
-**Template cache:** `?v=10`.
+**Template cache:** `?v=11`.
 
 ### Known card quirks / polish
 
