@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { isPokedexBackSwipeStart, resolvePokedexShellSwipe } from '../../utils/pokedex-gestures';
 import '../../styles/pokedex-device.css';
 
 export interface PokedexShellContext {
@@ -10,6 +11,7 @@ export interface PokedexShellContext {
 
 export function PokedexShell() {
   const location = useLocation();
+  const navigate = useNavigate();
   const isDexEntry = /^\/dex\/\d+/.test(location.pathname);
   const [activePanel, setActivePanel] = useState(0);
   const [sidePanel, setSidePanel] = useState<ReactNode | null>(null);
@@ -18,6 +20,7 @@ export function PokedexShell() {
   const startYRef = useRef(0);
   const draggingRef = useRef(false);
   const gestureLockRef = useRef<'h' | 'v' | null>(null);
+  const canSwipeBackRef = useRef(false);
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -41,9 +44,18 @@ export function PokedexShell() {
     if (!el) return;
 
     const onStart = (e: TouchEvent) => {
-      if (!enabledRef.current) return;
+      if (!enabledRef.current || e.touches.length !== 1) return;
       const target = e.target;
-      if (target instanceof Element && target.closest('[data-card-carousel="true"]')) {
+      const screen = target instanceof Element ? target.closest('.pokedex-screen') : null;
+      const surfaceLeft = screen?.getBoundingClientRect().left ?? el.getBoundingClientRect().left;
+      const startsAtBackEdge = activePanelRef.current === 0
+        && isPokedexBackSwipeStart(e.touches[0].clientX, surfaceLeft);
+      const isCardCarousel = target instanceof Element
+        && !!target.closest('[data-card-carousel="true"]');
+
+      // The carousel owns normal card swipes. A swipe from the screen's left edge
+      // passes through to the shell so returning to the list also works over a card.
+      if (isCardCarousel && !startsAtBackEdge) {
         draggingRef.current = false;
         return;
       }
@@ -51,6 +63,8 @@ export function PokedexShell() {
       startYRef.current = e.touches[0].clientY;
       draggingRef.current = true;
       gestureLockRef.current = null;
+      canSwipeBackRef.current = activePanelRef.current === 0
+        && (!isCardCarousel || startsAtBackEdge);
     };
     const onMove = (e: TouchEvent) => {
       if (!draggingRef.current || !trackRef.current || !enabledRef.current) return;
@@ -64,31 +78,72 @@ export function PokedexShell() {
       if (gestureLockRef.current !== 'h') return;
       e.preventDefault();
       const ap = activePanelRef.current;
-      const blockedAtStart = ap === 0 && dx > 0;
+      const isBackDrag = ap === 0 && canSwipeBackRef.current && dx > 0;
+      const blockedAtStart = ap === 0 && dx > 0 && !isBackDrag;
       const blockedAtEnd = ap === 1 && dx < 0;
       const resistedDx = blockedAtStart || blockedAtEnd ? dx * 0.22 : dx;
       trackRef.current.style.transform = `translateX(calc(-${ap * 100}% + ${resistedDx}px))`;
     };
-    const onEnd = (e: TouchEvent) => {
+
+    const snapToPanel = (panel: number) => {
+      const track = trackRef.current;
+      if (!track) return;
+      track.style.transition = 'transform 0.32s cubic-bezier(0.22, 0.61, 0.36, 1)';
+      track.style.transform = `translateX(-${panel * 100}%)`;
+      if (panel !== activePanelRef.current) {
+        activePanelRef.current = panel;
+        setActivePanel(panel);
+      }
+    };
+
+    const animateBackToList = () => {
+      const track = trackRef.current;
+      if (!track) {
+        navigate('/dex');
+        return;
+      }
+
+      track.style.transition = 'transform 0.24s cubic-bezier(0.22, 0.61, 0.36, 1)';
+      track.style.transform = 'translateX(100%)';
+
+      let fallbackId = 0;
+      const finish = () => {
+        track.removeEventListener('transitionend', finish);
+        window.clearTimeout(fallbackId);
+        navigate('/dex');
+      };
+      track.addEventListener('transitionend', finish, { once: true });
+      fallbackId = window.setTimeout(finish, 320);
+    };
+
+    const finishGesture = (e: TouchEvent, cancelled: boolean) => {
       if (!draggingRef.current) return;
       draggingRef.current = false;
       if (gestureLockRef.current !== 'h') return;
-      const dx = e.changedTouches[0].clientX - startXRef.current;
-      const nextPanel = dx < -70 ? 1 : dx > 70 ? 0 : activePanelRef.current;
-      setActivePanel(nextPanel);
+      const endTouch = e.changedTouches[0];
+      const dx = cancelled || !endTouch ? 0 : endTouch.clientX - startXRef.current;
+      const ap = activePanelRef.current;
+      const action = resolvePokedexShellSwipe(ap, dx, canSwipeBackRef.current);
+
+      if (action === 'back-to-list') animateBackToList();
+      else if (action === 'show-data') snapToPanel(1);
+      else if (action === 'show-main') snapToPanel(0);
+      else snapToPanel(ap);
     };
+    const onEnd = (e: TouchEvent) => finishGesture(e, false);
+    const onCancel = (e: TouchEvent) => finishGesture(e, true);
 
     el.addEventListener('touchstart', onStart, { passive: true });
     el.addEventListener('touchmove', onMove, { passive: false });
     el.addEventListener('touchend', onEnd, { passive: true });
-    el.addEventListener('touchcancel', onEnd, { passive: true });
+    el.addEventListener('touchcancel', onCancel, { passive: true });
     return () => {
       el.removeEventListener('touchstart', onStart);
       el.removeEventListener('touchmove', onMove);
       el.removeEventListener('touchend', onEnd);
-      el.removeEventListener('touchcancel', onEnd);
+      el.removeEventListener('touchcancel', onCancel);
     };
-  }, [setActivePanel]);
+  }, [navigate, setActivePanel]);
 
   const outlet = <Outlet context={{ activePanel, setActivePanel, setSidePanel } satisfies PokedexShellContext} />;
 

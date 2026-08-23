@@ -23,6 +23,7 @@ import {
   type HgssKantoEntry,
 } from '../../core/constants/hgss-kanto-data.generated';
 import { LEARNSETS_HGSS, type Gen4Learnset } from '../../core/constants/learnsets-gen4';
+import { isPokedexBackSwipeStart } from '../../utils/pokedex-gestures';
 import type { PokedexShellContext } from '../layout/PokedexShell';
 
 const ROMAN_PANEL = ['', 'I', 'II', 'III', 'IV'];
@@ -259,6 +260,12 @@ export function DexEntryScreen() {
     if (!node) return;
 
     const onStart = (e: TouchEvent) => {
+      const screen = node.closest('.pokedex-screen');
+      const surfaceLeft = screen?.getBoundingClientRect().left ?? 0;
+      if (isPokedexBackSwipeStart(e.touches[0].clientX, surfaceLeft)) {
+        draggingRef.current = false;
+        return;
+      }
       dragStartXRef.current = e.touches[0].clientX;
       dragStartYRef.current = e.touches[0].clientY;
       draggingRef.current = true;
@@ -277,12 +284,13 @@ export function DexEntryScreen() {
       e.preventDefault(); // suppress vertical scroll for the duration of the swipe
       node.style.transform = `translateX(calc(-100% + ${dx}px))`;
     };
-    const onEnd = (e: TouchEvent) => {
+    const finishCardGesture = (e: TouchEvent, cancelled: boolean) => {
       if (!draggingRef.current) return;
       draggingRef.current = false;
       if (gestureLockRef.current !== 'h') return;
       const count = countRef.current;
-      const dx = e.changedTouches[0].clientX - dragStartXRef.current;
+      const endTouch = e.changedTouches[0];
+      const dx = cancelled || !endTouch ? 0 : endTouch.clientX - dragStartXRef.current;
       if (Math.abs(dx) > 55 && count > 1) {
         slideToCard(dx < 0 ? 'next' : 'prev', count);
       } else {
@@ -290,16 +298,18 @@ export function DexEntryScreen() {
         node.style.transform = 'translateX(-100%)';
       }
     };
+    const onEnd = (e: TouchEvent) => finishCardGesture(e, false);
+    const onCancel = (e: TouchEvent) => finishCardGesture(e, true);
 
     node.addEventListener('touchstart', onStart, { passive: true });
     node.addEventListener('touchmove', onMove, { passive: false });
     node.addEventListener('touchend', onEnd, { passive: true });
-    node.addEventListener('touchcancel', onEnd, { passive: true });
+    node.addEventListener('touchcancel', onCancel, { passive: true });
     (node as HTMLDivElement & { _swipeCleanup?: () => void })._swipeCleanup = () => {
       node.removeEventListener('touchstart', onStart);
       node.removeEventListener('touchmove', onMove);
       node.removeEventListener('touchend', onEnd);
-      node.removeEventListener('touchcancel', onEnd);
+      node.removeEventListener('touchcancel', onCancel);
     };
   }, [slideToCard]);
 
@@ -459,7 +469,11 @@ export function DexEntryScreen() {
     <div style={s.container}>
       {/* Header */}
       <div style={s.header}>
-        <button style={s.navBtn} onClick={() => navigate('/dex')}>{'<'} BACK</button>
+        <button
+          style={s.navBtn}
+          onClick={() => navigate('/dex')}
+          title="Swipe right, or swipe from the left edge over a card, to return to the list"
+        >{'<'} BACK</button>
         <div style={s.navRow}>
           <button
             style={s.navBtn}
